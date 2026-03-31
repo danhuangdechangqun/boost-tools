@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boost Tools - 效能助推器 原型 v1.0</title>
+
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#3B82F6',
+            secondary: '#60A5FA',
+            cta: '#F97316',
+            bg: '#FFFFFF',
+            text: '#1F2937',
+            muted: '#6B7280',
+            card: '#FFFFFF',
+            border: '#E5E7EB',
+            sidebar: '#F9FAFB',
+            sidebarHover: '#F3F4F6',
+            active: '#EFF6FF',
+            activeBorder: '#3B82F6',
+            warning: '#FEF3C7',
+            warningBorder: '#F59E0B'
+          },
+          fontFamily: {
+            jakarta: ['Plus Jakarta Sans', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * { font-family: 'Plus Jakarta Sans', sans-serif; }
+
+    /* Smooth transitions */
+    .transition-smooth { transition: all 150ms ease; }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #FFFFFF; }
+    ::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 3px; }
+
+    /* 拖拽样式 */
+    .todo-item.dragging { opacity: 0.5; transform: scale(1.02); }
+    .drop-zone.drag-over { background: #EFF6FF !important; border-color: #3B82F6 !important; }
+
+    /* 删除按钮隐藏 */
+    .todo-item .delete-btn { opacity: 0; transition: opacity 150ms ease; }
+    .todo-item:hover .delete-btn { opacity: 1; }
+
+    /* 未完成待办样式 */
+    .overdue-item { background: #FEF3C7 !important; border-color: #F59E0B !important; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen font-jakarta">
+
+  <!-- 系统托盘模拟 -->
+  <div id="tray-bar" class="fixed top-0 right-0 h-8 bg-sidebar border-b border-border flex items-center px-2 gap-2 z-50">
+    <div class="w-4 h-4 bg-primary rounded flex items-center justify-center">
+      <i data-lucide="zap" class="w-3 h-3 text-white"></i>
+    </div>
+    <span class="text-text text-xs">Boost Tools</span>
+  </div>
+
+  <!-- 主容器 -->
+  <div class="flex h-screen pt-8">
+
+    <!-- 左侧分组导航 -->
+    <nav id="sidebar" class="w-16 bg-sidebar flex flex-col items-center py-4 gap-2 border-r border-border">
+
+      <button onclick="switchGroup('ai')" id="nav-ai" class="nav-btn w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1 transition-smooth cursor-pointer hover:bg-sidebarHover bg-active border-2 border-activeBorder" title="AI辅助">
+        <i data-lucide="bot" class="w-5 h-5 text-primary"></i>
+        <span class="text-xs text-primary font-semibold">AI</span>
+      </button>
+
+      <button onclick="switchGroup('expr')" id="nav-expr" class="nav-btn w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1 transition-smooth cursor-pointer hover:bg-sidebarHover border-2 border-transparent" title="表达式">
+        <i data-lucide="code-2" class="w-5 h-5 text-muted"></i>
+        <span class="text-xs text-muted">表达式</span>
+      </button>
+
+      <button onclick="switchGroup('fmt')" id="nav-fmt" class="nav-btn w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1 transition-smooth cursor-pointer hover:bg-sidebarHover border-2 border-transparent" title="格式化">
+        <i data-lucide="align-left" class="w-5 h-5 text-muted"></i>
+        <span class="text-xs text-muted">格式化</span>
+      </button>
+
+      <button onclick="switchGroup('tools')" id="nav-tools" class="nav-btn w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1 transition-smooth cursor-pointer hover:bg-sidebarHover border-2 border-transparent" title="工具">
+        <i data-lucide="wrench" class="w-5 h-5 text-muted"></i>
+        <span class="text-xs text-muted">工具</span>
+      </button>
+
+      <button onclick="switchGroup('data')" id="nav-data" class="nav-btn w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1 transition-smooth cursor-pointer hover:bg-sidebarHover border-2 border-transparent" title="数据">
+        <i data-lucide="database" class="w-5 h-5 text-muted"></i>
+        <span class="text-xs text-muted">数据</span>
+      </button>
+
+      <div class="w-8 h-px bg-border my-2"></div>
+
+      <button onclick="showPage('settings')" id="nav-settings" class="nav-btn w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1 transition-smooth cursor-pointer hover:bg-sidebarHover border-2 border-transparent" title="设置">
+        <i data-lucide="settings" class="w-5 h-5 text-muted"></i>
+        <span class="text-xs text-muted">设置</span>
+      </button>
+    </nav>
+
+    <!-- 右侧内容区 -->
+    <main class="flex-1 overflow-hidden">
+
+      <!-- 分组卡片视图 -->
+      <div id="group-view" class="h-full p-6">
+
+        <!-- AI辅助组 -->
+        <div id="group-ai" class="group-content">
+          <h2 class="text-xl font-semibold text-text mb-4">AI辅助</h2>
+          <div class="grid grid-cols-2 gap-4">
+
+            <div onclick="showPage('todo')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3">
+                <i data-lucide="list-checks" class="w-6 h-6 text-primary"></i>
+                <span class="font-semibold text-text">TodoList周报</span>
+              </div>
+              <p class="text-sm text-text/70">待办任务管理 + 自动生成周报，智能识别节假日调整发送时间</p>
+            </div>
+
+            <div onclick="showPage('file-read')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3">
+                <i data-lucide="file-text" class="w-6 h-6 text-primary"></i>
+                <span class="font-semibold text-text">文件解读</span>
+              </div>
+              <p class="text-sm text-text/70">上传Word/PDF，AI解读重点内容并标注来源位置</p>
+            </div>
+
+            <div onclick="showPage('fake-data')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3">
+                <i data-lucide="table-2" class="w-6 h-6 text-primary"></i>
+                <span class="font-semibold text-text">假数据生成</span>
+              </div>
+              <p class="text-sm text-text/70">输入字段描述，AI生成JSON或表格格式的假数据</p>
+            </div>
+
+            <div onclick="showPage('prompts')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3">
+                <i data-lucide="message-square" class="w-6 h-6 text-primary"></i>
+                <span class="font-semibold text-text">提示词模板</span>
+              </div>
+              <p class="text-sm text-text/70">自定义提示词模板，{{占位符}}填充复用</p>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 表达式生成组 -->
+        <div id="group-expr" class="group-content hidden">
+          <h2 class="text-xl font-semibold text-text mb-4">表达式生成</h2>
+          <div class="grid grid-cols-3 gap-4">
+            <div onclick="showPage('aviator')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3"><i data-lucide="calculator" class="w-6 h-6 text-primary"></i><span class="font-semibold text-text">Aviator表达式</span></div>
+              <p class="text-sm text-text/70">可视化拼接Aviator表达式</p>
+            </div>
+            <div onclick="showPage('cron')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3"><i data-lucide="clock" class="w-6 h-6 text-primary"></i><span class="font-semibold text-text">Cron表达式</span></div>
+              <p class="text-sm text-text/70">点点点生成Cron表达式</p>
+            </div>
+            <div onclick="showPage('regex')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3"><i data-lucide="regex" class="w-6 h-6 text-primary"></i><span class="font-semibold text-text">正则表达式</span></div>
+              <p class="text-sm text-text/70">17种常用正则预设</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 格式化组 -->
+        <div id="group-fmt" class="group-content hidden">
+          <h2 class="text-xl font-semibold text-text mb-4">格式化</h2>
+          <div class="grid grid-cols-3 gap-4">
+            <div onclick="showPage('json')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3"><i data-lucide="braces" class="w-6 h-6 text-primary"></i><span class="font-semibold text-text">JSON美化</span></div>
+              <p class="text-sm text-text/70">格式化/压缩JSON</p>
+            </div>
+            <div onclick="showPage('xml')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3"><i data-lucide="file-code" class="w-6 h-6 text-primary"></i><span class="font-semibold text-text">XML美化</span></div>
+              <p class="text-sm text-text/70">格式化/压缩XML</p>
+            </div>
+            <div onclick="showPage('diff')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3"><i data-lucide="git-compare" class="w-6 h-6 text-primary"></i><span class="font-semibold text-text">文本比较</span></div>
+              <p class="text-sm text-text/70">两段文本差异对比</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 工具组 -->
+        <div id="group-tools" class="group-content hidden">
+          <h2 class="text-xl font-semibold text-text mb-4">工具</h2>
+          <div class="grid grid-cols-3 gap-4">
+            <div onclick="showPage('uuid')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3"><i data-lucide="fingerprint" class="w-6 h-6 text-primary"></i><span class="font-semibold text-text">UUID生成</span></div>
+              <p class="text-sm text-text/70">批量生成UUID</p>
+            </div>
+            <div onclick="showPage('crypto')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3"><i data-lucide="lock" class="w-6 h-6 text-primary"></i><span class="font-semibold text-text">加密工具</span></div>
+              <p class="text-sm text-text/70">MD5、SHA等哈希计算</p>
+            </div>
+            <div onclick="showPage('template')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3"><i data-lucide="layout-template" class="w-6 h-6 text-primary"></i><span class="font-semibold text-text">数据填充模板</span></div>
+              <p class="text-sm text-text/70">数据格式转换</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 数据管理组 -->
+        <div id="group-data" class="group-content hidden">
+          <h2 class="text-xl font-semibold text-text mb-4">数据管理</h2>
+          <div class="grid grid-cols-2 gap-4">
+            <div onclick="showPage('notes')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3"><i data-lucide="notebook-pen" class="w-6 h-6 text-primary"></i><span class="font-semibold text-text">笔记</span></div>
+              <p class="text-sm text-text/70">本地笔记管理</p>
+            </div>
+            <div onclick="showPage('passwords')" class="feature-card bg-card rounded-xl p-5 border border-border cursor-pointer transition-smooth hover:border-primary hover:shadow-sm">
+              <div class="flex items-center gap-3 mb-3"><i data-lucide="key-round" class="w-6 h-6 text-primary"></i><span class="font-semibold text-text">账号密码</span></div>
+              <p class="text-sm text-text/70">账号密码本地存储</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 通用占位页面 -->
+      <div id="page-file-read" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border">
+          <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button>
+          <h2 class="text-lg font-semibold text-text">文件解读</h2>
+        </div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="file-text" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-fake-data" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">假数据生成</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="table-2" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-prompts" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">提示词模板</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="message-square" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-aviator" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">Aviator表达式</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="calculator" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-cron" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">Cron表达式</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="clock" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-regex" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">正则表达式</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="regex" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-json" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">JSON美化</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="braces" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-xml" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">XML美化</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="file-code" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-diff" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">文本比较</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="git-compare" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-uuid" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">UUID生成</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="fingerprint" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-crypto" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">加密工具</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="lock" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-template" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">数据填充模板</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="layout-template" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-notes" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">笔记</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="notebook-pen" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+      <div id="page-passwords" class="page-content hidden h-full flex flex-col">
+        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">账号密码</h2></div>
+        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="key-round" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+      </div>
+
+      <!-- TodoList功能页面 -->
+      <div id="page-todo" class="page-content hidden h-full flex flex-col">
+        <!-- 页面头部 -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer">
+              <i data-lucide="arrow-left" class="w-5 h-5 text-text"></i>
+            </button>
+            <h2 class="text-lg font-semibold text-text">TodoList周报</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="generateReport()" class="px-4 py-2 bg-cta text-white rounded-lg font-medium transition-smooth hover:bg-cta/80 cursor-pointer">
+              <i data-lucide="file-text" class="w-4 h-4 inline mr-1"></i>生成周报
+            </button>
+            <button onclick="addTodo()" class="px-4 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer">
+              <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>新增任务
+            </button>
+          </div>
+        </div>
+
+        <!-- 任务列表区 -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-3 gap-4 h-full">
+
+            <!-- 今日待办 -->
+            <div class="bg-card rounded-xl border border-border p-4 drop-zone" data-group="today" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'today')">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-text">今日待办</h3>
+                <span class="text-xs text-muted bg-gray-100 px-2 py-1 rounded todo-count" data-group="today">3项</span>
+              </div>
+              <div class="space-y-3 min-h-[200px]" id="today-list">
+
+                <div class="todo-item p-3 bg-gray-50 rounded-lg border border-border cursor-move transition-smooth hover:border-primary hover:shadow-sm" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" data-id="1" data-title="完成PRD文档编写" data-desc="需要完成Boost Tools产品的PRD文档，包含15个功能模块的详细需求定义" ondblclick="showTodoDetail(this)">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2 flex-1">
+                      <input type="checkbox" class="w-4 h-4 mt-0.5 accent-primary cursor-pointer" onclick="toggleComplete(this, event)">
+                      <div class="flex-1">
+                        <span class="text-sm text-text font-medium">完成PRD文档编写</span>
+                        <div class="flex items-center gap-2 mt-1 text-xs text-muted">
+                          <i data-lucide="clock" class="w-3 h-3"></i>
+                          <span>截止: 今天 18:00</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)">
+                      <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="todo-item p-3 bg-gray-50 rounded-lg border border-border cursor-move transition-smooth hover:border-primary hover:shadow-sm" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" data-id="2" data-title="原型设计评审" data-desc="与团队一起评审原型设计，收集反馈意见" ondblclick="showTodoDetail(this)">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2 flex-1">
+                      <input type="checkbox" class="w-4 h-4 mt-0.5 accent-primary cursor-pointer" onclick="toggleComplete(this, event)">
+                      <div class="flex-1">
+                        <span class="text-sm text-text font-medium">原型设计评审</span>
+                        <div class="flex items-center gap-2 mt-1 text-xs text-muted">
+                          <i data-lucide="clock" class="w-3 h-3"></i>
+                          <span>截止: 今天 15:00</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)">
+                      <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="todo-item p-3 bg-gray-50 rounded-lg border border-border cursor-move transition-smooth hover:border-primary hover:shadow-sm" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" data-id="3" data-title="修复登录Bug" data-desc="用户反馈登录页面偶尔出现超时问题，需要排查并修复" ondblclick="showTodoDetail(this)">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2 flex-1">
+                      <input type="checkbox" class="w-4 h-4 mt-0.5 accent-primary cursor-pointer" onclick="toggleComplete(this, event)">
+                      <div class="flex-1">
+                        <span class="text-sm text-text font-medium">修复登录Bug</span>
+                      </div>
+                    </div>
+                    <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)">
+                      <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- 明日待办 -->
+            <div class="bg-card rounded-xl border border-border p-4 drop-zone" data-group="tomorrow" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'tomorrow')">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-text">明日待办</h3>
+                <span class="text-xs text-muted bg-gray-100 px-2 py-1 rounded todo-count" data-group="tomorrow">2项</span>
+              </div>
+              <div class="space-y-3 min-h-[200px]" id="tomorrow-list">
+
+                <div class="todo-item p-3 bg-gray-50 rounded-lg border border-border cursor-move transition-smooth hover:border-primary hover:shadow-sm" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" data-id="4" data-title="部署测试环境" data-desc="将最新版本部署到测试环境，进行集成测试" ondblclick="showTodoDetail(this)">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2 flex-1">
+                      <input type="checkbox" class="w-4 h-4 mt-0.5 accent-primary cursor-pointer" onclick="toggleComplete(this, event)">
+                      <div class="flex-1">
+                        <span class="text-sm text-text font-medium">部署测试环境</span>
+                      </div>
+                    </div>
+                    <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)">
+                      <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="todo-item p-3 bg-gray-50 rounded-lg border border-border cursor-move transition-smooth hover:border-primary hover:shadow-sm" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" data-id="5" data-title="代码评审会议" data-desc="参加团队代码评审会议，讨论本周提交的代码" ondblclick="showTodoDetail(this)">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2 flex-1">
+                      <input type="checkbox" class="w-4 h-4 mt-0.5 accent-primary cursor-pointer" onclick="toggleComplete(this, event)">
+                      <div class="flex-1">
+                        <span class="text-sm text-text font-medium">代码评审会议</span>
+                      </div>
+                    </div>
+                    <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)">
+                      <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- 下周计划 -->
+            <div class="bg-card rounded-xl border border-border p-4 drop-zone" data-group="nextweek" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'nextweek')">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-text">下周计划</h3>
+                <span class="text-xs text-muted bg-gray-100 px-2 py-1 rounded todo-count" data-group="nextweek">4项</span>
+              </div>
+              <div class="space-y-3 min-h-[200px]" id="nextweek-list">
+
+                <div class="todo-item p-3 bg-gray-50 rounded-lg border border-border cursor-move transition-smooth hover:border-primary hover:shadow-sm" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" data-id="6" data-title="新功能开发启动" data-desc="启动用户权限管理模块的开发工作" ondblclick="showTodoDetail(this)">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2 flex-1">
+                      <input type="checkbox" class="w-4 h-4 mt-0.5 accent-primary cursor-pointer" onclick="toggleComplete(this, event)">
+                      <div class="flex-1"><span class="text-sm text-text font-medium">新功能开发启动</span></div>
+                    </div>
+                    <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </div>
+
+                <div class="todo-item p-3 bg-gray-50 rounded-lg border border-border cursor-move transition-smooth hover:border-primary hover:shadow-sm" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" data-id="7" data-title="性能优化调研" data-desc="调研系统性能优化方案，重点关注数据库查询优化" ondblclick="showTodoDetail(this)">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2 flex-1">
+                      <input type="checkbox" class="w-4 h-4 mt-0.5 accent-primary cursor-pointer" onclick="toggleComplete(this, event)">
+                      <div class="flex-1"><span class="text-sm text-text font-medium">性能优化调研</span></div>
+                    </div>
+                    <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </div>
+
+                <div class="todo-item p-3 bg-gray-50 rounded-lg border border-border cursor-move transition-smooth hover:border-primary hover:shadow-sm" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" data-id="8" data-title="技术文档整理" data-desc="整理项目技术文档，更新API文档" ondblclick="showTodoDetail(this)">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2 flex-1">
+                      <input type="checkbox" class="w-4 h-4 mt-0.5 accent-primary cursor-pointer" onclick="toggleComplete(this, event)">
+                      <div class="flex-1"><span class="text-sm text-text font-medium">技术文档整理</span></div>
+                    </div>
+                    <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </div>
+
+                <div class="todo-item p-3 bg-gray-50 rounded-lg border border-border cursor-move transition-smooth hover:border-primary hover:shadow-sm" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" data-id="9" data-title="团队分享会准备" data-desc="准备技术分享会的演示内容，主题为微服务架构实践" ondblclick="showTodoDetail(this)">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2 flex-1">
+                      <input type="checkbox" class="w-4 h-4 mt-0.5 accent-primary cursor-pointer" onclick="toggleComplete(this, event)">
+                      <div class="flex-1"><span class="text-sm text-text font-medium">团队分享会准备</span></div>
+                    </div>
+                    <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 未完成待办区域（昨日遗留） -->
+        <div class="p-4 border-t border-border bg-amber-50">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-amber-700 flex items-center gap-2">
+              <i data-lucide="alert-circle" class="w-4 h-4"></i>
+              未完成待办（昨日遗留）
+            </h3>
+            <span class="text-xs text-amber-600 bg-amber-100 px-2 py-1 rounded" id="overdue-count">2项</span>
+          </div>
+          <div class="flex gap-3 overflow-x-auto pb-2" id="overdue-list">
+
+            <div class="todo-item overdue-item px-4 py-3 rounded-lg text-sm text-text whitespace-nowrap border cursor-move transition-smooth hover:shadow-sm flex items-center gap-3" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" data-id="10" data-title="整理会议纪要" data-desc="整理上周产品会议的会议纪要，并发送给相关人员" ondblclick="showTodoDetail(this)">
+              <input type="checkbox" class="w-4 h-4 accent-amber-500 cursor-pointer" onclick="toggleComplete(this, event)">
+              <span class="font-medium">整理会议纪要</span>
+              <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>
+
+            <div class="todo-item overdue-item px-4 py-3 rounded-lg text-sm text-text whitespace-nowrap border cursor-move transition-smooth hover:shadow-sm flex items-center gap-3" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" data-id="11" data-title="更新依赖版本" data-desc="更新项目中过期的npm依赖包，确保安全性" ondblclick="showTodoDetail(this)">
+              <input type="checkbox" class="w-4 h-4 accent-amber-500 cursor-pointer" onclick="toggleComplete(this, event)">
+              <span class="font-medium">更新依赖版本</span>
+              <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 已完成区域 -->
+        <div class="p-4 border-t border-border bg-gray-50">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-text flex items-center gap-2">
+              <i data-lucide="check-circle" class="w-4 h-4 text-primary"></i>
+              本周已完成
+            </h3>
+            <span class="text-xs text-muted" id="completed-count">5项</span>
+          </div>
+          <div class="flex gap-3 overflow-x-auto pb-2" id="completed-list">
+
+            <div class="completed-item px-4 py-3 bg-green-50 rounded-lg text-sm text-text whitespace-nowrap border border-green-200 flex items-center gap-3 cursor-pointer" data-title="完成API接口设计" data-desc="完成用户模块的RESTful API接口设计，包含登录、注册、权限验证等接口" ondblclick="showTodoDetail(this)">
+              <i data-lucide="check" class="w-4 h-4 text-green-500"></i>
+              <span class="line-through text-muted">完成API接口设计</span>
+            </div>
+
+            <div class="completed-item px-4 py-3 bg-green-50 rounded-lg text-sm text-text whitespace-nowrap border border-green-200 flex items-center gap-3 cursor-pointer" data-title="数据库表结构优化" data-desc="优化用户表和订单表的索引，提升查询性能" ondblclick="showTodoDetail(this)">
+              <i data-lucide="check" class="w-4 h-4 text-green-500"></i>
+              <span class="line-through text-muted">数据库表结构优化</span>
+            </div>
+
+            <div class="completed-item px-4 py-3 bg-green-50 rounded-lg text-sm text-text whitespace-nowrap border border-green-200 flex items-center gap-3 cursor-pointer" data-title="用户反馈整理" data-desc="整理上周收集的用户反馈，分类并排定优先级" ondblclick="showTodoDetail(this)">
+              <i data-lucide="check" class="w-4 h-4 text-green-500"></i>
+              <span class="line-through text-muted">用户反馈整理</span>
+            </div>
+
+            <div class="completed-item px-4 py-3 bg-green-50 rounded-lg text-sm text-text whitespace-nowrap border border-green-200 flex items-center gap-3 cursor-pointer" data-title="测试用例编写" data-desc="编写用户模块的单元测试和集成测试用例" ondblclick="showTodoDetail(this)">
+              <i data-lucide="check" class="w-4 h-4 text-green-500"></i>
+              <span class="line-through text-muted">测试用例编写</span>
+            </div>
+
+            <div class="completed-item px-4 py-3 bg-green-50 rounded-lg text-sm text-text whitespace-nowrap border border-green-200 flex items-center gap-3 cursor-pointer" data-title="版本发布准备" data-desc="准备v1.2.0版本的发布清单和发布说明" ondblclick="showTodoDetail(this)">
+              <i data-lucide="check" class="w-4 h-4 text-green-500"></i>
+              <span class="line-through text-muted">版本发布准备</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- 设置页面 -->
+      <div id="page-settings" class="page-content hidden h-full overflow-auto">
+        <div class="max-w-2xl mx-auto p-6">
+          <div class="flex items-center gap-3 mb-6">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button>
+            <h2 class="text-lg font-semibold text-text">设置</h2>
+          </div>
+
+          <div class="bg-card rounded-xl border border-border p-5 mb-4">
+            <h3 class="font-semibold text-text mb-4 flex items-center gap-2"><i data-lucide="bot" class="w-5 h-5 text-primary"></i>大模型API配置</h3>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm text-text mb-2">API格式</label>
+                <select class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none cursor-pointer">
+                  <option>Anthropic Messages (原生)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm text-text mb-2">API地址</label>
+                <input type="text" placeholder="https://api.anthropic.com" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+              </div>
+              <div>
+                <label class="block text-sm text-text mb-2">API Key</label>
+                <input type="password" placeholder="sk-ant-xxx" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+              </div>
+              <div>
+                <label class="block text-sm text-text mb-2">模型</label>
+                <input type="text" placeholder="claude-sonnet-4-20250514" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+              </div>
+              <button class="px-4 py-2 bg-secondary text-white rounded-lg font-medium transition-smooth hover:bg-secondary/80 cursor-pointer"><i data-lucide="wifi" class="w-4 h-4 inline mr-1"></i>连接测试</button>
+            </div>
+          </div>
+
+          <div class="bg-card rounded-xl border border-border p-5 mb-4">
+            <h3 class="font-semibold text-text mb-4 flex items-center gap-2"><i data-lucide="keyboard" class="w-5 h-5 text-primary"></i>快捷键设置</h3>
+            <div class="flex items-center gap-4">
+              <label class="text-sm text-text">唤起窗口快捷键</label>
+              <input type="text" value="Ctrl + Alt + B" class="px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none w-32 text-center">
+              <button class="px-3 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer">重新设置</button>
+            </div>
+          </div>
+
+          <div class="bg-card rounded-xl border border-border p-5">
+            <h3 class="font-semibold text-text mb-4 flex items-center gap-2"><i data-lucide="calendar" class="w-5 h-5 text-primary"></i>周报设置</h3>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <label class="text-sm text-text">自动生成周报</label>
+                <input type="checkbox" checked class="w-5 h-5 accent-primary cursor-pointer">
+              </div>
+              <div class="flex items-center gap-4">
+                <label class="text-sm text-text">生成时间</label>
+                <input type="time" value="17:00" class="px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+              </div>
+              <div class="flex items-center gap-4">
+                <label class="text-sm text-text">周报格式</label>
+                <select class="px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none cursor-pointer">
+                  <option>Markdown</option>
+                  <option>纯文本</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 新增任务弹窗 -->
+      <div id="modal-add-todo" class="modal hidden fixed inset-0 bg-black/50 flex items-center justify-center z-40">
+        <div class="bg-card rounded-xl border border-border p-6 w-[420px] max-w-full mx-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-text">新增任务</h3>
+            <button onclick="closeModal('modal-add-todo')" class="p-1 rounded hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="x" class="w-5 h-5 text-text"></i></button>
+          </div>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm text-text mb-2">任务标题 *</label>
+              <input type="text" id="todo-title" placeholder="请输入任务标题" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-sm text-text mb-2">任务描述</label>
+              <textarea id="todo-desc" placeholder="请输入任务描述（可选）" rows="3" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none resize-none"></textarea>
+            </div>
+            <div>
+              <label class="block text-sm text-text mb-2">分组</label>
+              <select id="todo-group" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none cursor-pointer">
+                <option value="today">今日待办</option>
+                <option value="tomorrow">明日待办</option>
+                <option value="nextweek">下周计划</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm text-text mb-2">截止日期</label>
+              <input type="date" id="todo-date" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+            </div>
+            <div class="flex gap-3 pt-2">
+              <button onclick="closeModal('modal-add-todo')" class="px-4 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer">取消</button>
+              <button onclick="saveTodo()" class="px-4 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer">保存</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 任务详情弹窗 -->
+      <div id="modal-detail" class="modal hidden fixed inset-0 bg-black/50 flex items-center justify-center z-40">
+        <div class="bg-card rounded-xl border border-border p-6 w-[420px] max-w-full mx-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-text" id="detail-title">任务详情</h3>
+            <button onclick="closeModal('modal-detail')" class="p-1 rounded hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="x" class="w-5 h-5 text-text"></i></button>
+          </div>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs text-muted mb-1">标题</label>
+              <p class="text-text font-medium" id="detail-title-text"></p>
+            </div>
+            <div>
+              <label class="block text-xs text-muted mb-1">描述</label>
+              <p class="text-text bg-gray-50 rounded-lg p-3 text-sm" id="detail-desc-text">暂无描述</p>
+            </div>
+          </div>
+          <div class="flex gap-3 mt-6">
+            <button onclick="closeModal('modal-detail')" class="px-4 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer">关闭</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 周报生成弹窗 -->
+      <div id="modal-report" class="modal hidden fixed inset-0 bg-black/50 flex items-center justify-center z-40">
+        <div class="bg-card rounded-xl border border-border p-6 w-[600px] max-w-full mx-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-text">本周工作总结</h3>
+            <button onclick="closeModal('modal-report')" class="p-1 rounded hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="x" class="w-5 h-5 text-text"></i></button>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-4 text-sm text-text mb-4 max-h-64 overflow-auto">
+            <p class="font-semibold mb-2">## 本周工作总结（2026-03-31）</p>
+            <p class="font-semibold mt-3 mb-1">### 已完成任务</p>
+            <p class="ml-4">- [2026-03-25] 完成API接口设计</p>
+            <p class="ml-4">- [2026-03-26] 数据库表结构优化</p>
+            <p class="ml-4">- [2026-03-27] 用户反馈整理</p>
+            <p class="ml-4">- [2026-03-28] 测试用例编写</p>
+            <p class="ml-4">- [2026-03-29] 版本发布准备</p>
+            <p class="font-semibold mt-3 mb-1">### 统计</p>
+            <p class="ml-4">本周共完成 5 项任务</p>
+          </div>
+          <div class="flex gap-3">
+            <button class="px-4 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer flex items-center gap-2"><i data-lucide="copy" class="w-4 h-4"></i>复制周报</button>
+            <button onclick="closeModal('modal-report')" class="px-4 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer">关闭</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    lucide.createIcons();
+    let draggedItem = null;
+    let todoIdCounter = 100;
+
+    // 分组切换
+    function switchGroup(group) {
+      document.querySelectorAll('.group-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById('group-' + group).classList.remove('hidden');
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-active', 'border-activeBorder');
+        btn.classList.add('border-transparent');
+        btn.querySelector('i').classList.remove('text-primary');
+        btn.querySelector('i').classList.add('text-muted');
+        btn.querySelector('span').classList.remove('text-primary', 'font-semibold');
+        btn.querySelector('span').classList.add('text-muted');
+      });
+      const activeBtn = document.getElementById('nav-' + group);
+      activeBtn.classList.add('bg-active', 'border-activeBorder');
+      activeBtn.classList.remove('border-transparent');
+      activeBtn.querySelector('i').classList.remove('text-muted');
+      activeBtn.querySelector('i').classList.add('text-primary');
+      activeBtn.querySelector('span').classList.remove('text-muted');
+      activeBtn.querySelector('span').classList.add('text-primary', 'font-semibold');
+      document.querySelectorAll('.page-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById('group-view').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function showPage(page) {
+      document.getElementById('group-view').classList.add('hidden');
+      document.querySelectorAll('.page-content').forEach(el => el.classList.add('hidden'));
+      const targetPage = document.getElementById('page-' + page);
+      if (targetPage) targetPage.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function backToGroup() {
+      document.querySelectorAll('.page-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById('group-view').classList.remove('hidden');
+    }
+
+    function addTodo() {
+      document.getElementById('modal-add-todo').classList.remove('hidden');
+      document.getElementById('todo-title').value = '';
+      document.getElementById('todo-desc').value = '';
+      lucide.createIcons();
+    }
+
+    function generateReport() {
+      document.getElementById('modal-report').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    function saveTodo() {
+      const title = document.getElementById('todo-title').value;
+      const desc = document.getElementById('todo-desc').value;
+      const group = document.getElementById('todo-group').value;
+      if (!title.trim()) { alert('请输入任务标题'); return; }
+
+      const listId = group + '-list';
+      const list = document.getElementById(listId);
+      const newItem = document.createElement('div');
+      newItem.className = 'todo-item p-3 bg-gray-50 rounded-lg border border-border cursor-move transition-smooth hover:border-primary hover:shadow-sm';
+      newItem.draggable = true;
+      newItem.dataset.id = todoIdCounter++;
+      newItem.dataset.title = title;
+      newItem.dataset.desc = desc || '暂无描述';
+      newItem.ondragstart = handleDragStart;
+      newItem.ondragend = handleDragEnd;
+      newItem.ondblclick = function() { showTodoDetail(this); };
+
+      newItem.innerHTML = `
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex items-start gap-2 flex-1">
+            <input type="checkbox" class="w-4 h-4 mt-0.5 accent-primary cursor-pointer" onclick="toggleComplete(this, event)">
+            <div class="flex-1"><span class="text-sm text-text font-medium">${title}</span></div>
+          </div>
+          <button class="delete-btn p-1 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer" onclick="deleteTodo(this, event)"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+        </div>`;
+
+      list.appendChild(newItem);
+      lucide.createIcons();
+      updateCounts();
+      document.getElementById('todo-title').value = '';
+      document.getElementById('todo-desc').value = '';
+      closeModal('modal-add-todo');
+    }
+
+    function deleteTodo(btn, e) {
+      e.stopPropagation();
+      const item = btn.closest('.todo-item');
+      item.remove();
+      updateCounts();
+    }
+
+    function toggleComplete(checkbox, e) {
+      e.stopPropagation();
+      const item = checkbox.closest('.todo-item');
+      const title = item.dataset.title || item.querySelector('span').textContent;
+      const desc = item.dataset.desc || '暂无描述';
+
+      if (checkbox.checked) {
+        item.remove();
+        const completedList = document.getElementById('completed-list');
+        const completedItem = document.createElement('div');
+        completedItem.className = 'completed-item px-4 py-3 bg-green-50 rounded-lg text-sm text-text whitespace-nowrap border border-green-200 flex items-center gap-3 cursor-pointer';
+        completedItem.dataset.title = title;
+        completedItem.dataset.desc = desc;
+        completedItem.ondblclick = function() { showTodoDetail(this); };
+        completedItem.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-green-500"></i><span class="line-through text-muted">${title}</span>`;
+        completedList.appendChild(completedItem);
+        lucide.createIcons();
+        updateCounts();
+      }
+    }
+
+    function showTodoDetail(item) {
+      const title = item.dataset.title || item.querySelector('span').textContent;
+      const desc = item.dataset.desc || '暂无描述';
+      document.getElementById('detail-title-text').textContent = title;
+      document.getElementById('detail-desc-text').textContent = desc;
+      document.getElementById('modal-detail').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function updateCounts() {
+      ['today', 'tomorrow', 'nextweek'].forEach(group => {
+        const list = document.getElementById(group + '-list');
+        const count = list.querySelectorAll('.todo-item').length;
+        const countEl = document.querySelector(`.todo-count[data-group="${group}"]`);
+        if (countEl) countEl.textContent = count + '项';
+      });
+
+      const overdueList = document.getElementById('overdue-list');
+      const overdueCount = overdueList.querySelectorAll('.todo-item').length;
+      const overdueCountEl = document.getElementById('overdue-count');
+      if (overdueCountEl) overdueCountEl.textContent = overdueCount + '项';
+
+      const completedList = document.getElementById('completed-list');
+      const completedCount = completedList.querySelectorAll('.completed-item').length;
+      const completedCountEl = document.getElementById('completed-count');
+      if (completedCountEl) completedCountEl.textContent = completedCount + '项';
+    }
+
+    function handleDragStart(e) {
+      draggedItem = e.target.closest('.todo-item');
+      draggedItem.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function handleDragEnd(e) {
+      if (draggedItem) draggedItem.classList.remove('dragging');
+      document.querySelectorAll('.drop-zone').forEach(zone => zone.classList.remove('drag-over'));
+      draggedItem = null;
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const zone = e.target.closest('.drop-zone');
+      if (zone) zone.classList.add('drag-over');
+    }
+
+    function handleDrop(e, group) {
+      e.preventDefault();
+      const zone = e.target.closest('.drop-zone');
+      if (zone) zone.classList.remove('drag-over');
+      if (draggedItem) {
+        const list = document.getElementById(group + '-list');
+        if (list) {
+          draggedItem.classList.remove('overdue-item');
+          list.appendChild(draggedItem);
+          updateCounts();
+        }
+      }
+    }
+  </script>
+</body>
+</html>
