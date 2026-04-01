@@ -1,0 +1,65 @@
+{
+  "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/main/schemas/neutralino.config.schema.json",
+  "applicationId": "boost-tools",
+  "version": "1.0.0",
+  "defaultMode": "window",
+  "port": 0,
+  "documentRoot": "/dist/",
+  "url": "/",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "tokenSecurity": "one-time",
+  "logging": {
+    "enabled": true,
+    "writeToLogFile": false
+  },
+  "nativeAllowList": [
+    "app.*",
+    "os.*",
+    "debug.*",
+    "filesystem.*",
+    "storage.*",
+    "computer.*",
+    "window.*",
+    "events.*",
+    "clipboard.*",
+    "tray.*",
+    "hotkeys.*",
+    "updater.*"
+  ],
+  "globalVariables": {
+    "APP_NAME": "Boost Tools"
+  },
+  "modes": {
+    "window": {
+      "title": "Boost Tools - 效能助推器",
+      "width": 900,
+      "height": 650,
+      "minWidth": 700,
+      "minHeight": 500,
+      "fullScreen": false,
+      "alwaysOnTop": false,
+      "icon": "/resources/icons/icon.png",
+      "enableInspector": true,
+      "borderless": false,
+      "maximize": false,
+      "hidden": false,
+      "resizable": true,
+      "exitProcessOnClose": true
+    }
+  },
+  "tray": {
+    "enabled": true,
+    "icon": "/resources/icons/tray.png",
+    "menuItems": [
+      { "id": "show", "text": "显示窗口" },
+      { "id": "settings", "text": "设置" },
+      { "id": "quit", "text": "退出" }
+    ]
+  },
+  "cli": {
+    "binaryName": "boost-tools",
+    "frontendLibrary": "React",
+    "projectVersion": "1.0.0"
+  }
+}

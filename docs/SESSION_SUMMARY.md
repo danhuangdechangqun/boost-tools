@@ -243,9 +243,125 @@ D:\AI\boost-tools\
 
 **设计文档路径**：`D:\code\AI\boost-tools\docs\plans\2026-03-31-boost-tools-design.md`
 
-**下一步**：调用 `writing-plans` 技能创建实施计划
+---
+
+## 十、2026-04-01 开发进度（代码已生成）
+
+### 10.1 已完成的代码文件
+
+**Electron主进程：**
+- `electron/main.ts` - 主入口，托盘，IPC注册
+- `electron/preload.ts` - 预加载脚本
+- `electron/tsconfig.json` - TS配置
+- `electron/services/StoreService.ts` - JSON存储
+- `electron/services/LLMService.ts` - 大模型调用
+- `electron/services/HolidayService.ts` - 节假日判断
+
+**React前端：**
+- `src/main.tsx` - 入口
+- `src/App.tsx` - 应用主组件
+- `src/index.css` - 全局样式
+- `src/components/Layout/` - 布局组件
+- `src/components/GroupView.tsx` - 分组视图
+- `src/views/ai/` - AI辅助页面（4个）
+- `src/views/expression/` - 表达式页面（3个）
+- `src/views/format/` - 格式化页面（3个）
+- `src/views/tools/` - 工具页面（3个）
+- `src/views/data/` - 数据管理页面（2个）
+- `src/views/settings/SettingsPage.tsx` - 设置页面
+
+**配置文件：**
+- `package.json` - 依赖配置
+- `tsconfig.json` - TypeScript配置
+- `vite.config.ts` - Vite配置
+- `index.html` - HTML入口
+- `data/*.json` - 数据文件
+
+### 10.2 下一步操作
+
+重启电脑后执行：
+
+```powershell
+cd D:\code\AI\boost-tools
+
+# 如果electron还有问题，重新安装
+Remove-Item -Recurse -Force node_modules\electron
+npm install electron
+
+# 启动开发
+npm run dev:renderer   # 终端1：Vite开发服务器
+npm run build:electron # 终端2：编译Electron
+npm run start          # 终端2：启动应用
+```
 
 ---
 
 **下次继续时，告诉Claude：**
-> "Boost Tools设计文档已完成，请调用writing-plans技能创建实施计划。"
+> "正在从 Electron 迁移到 Tauri。请继续写 Tauri 迁移设计文档。"
+
+---
+
+## 十一、2026-04-01 技术栈重大变更：Electron → Tauri
+
+### 11.1 变更决策
+
+| 决策项 | 原方案（Electron） | 新方案（Tauri） |
+|--------|-------------------|-----------------|
+| 框架 | Electron 28 | Tauri 2.x（最新稳定版） |
+| 后端语言 | Node.js (TypeScript) | Rust |
+| 打包体积 | ~150-200MB | ~10-15MB |
+| 渲染引擎 | 自带 Chromium | 系统 WebView2（Windows自带） |
+| 托盘/快捷键 | Electron内置 | Tauri插件（tauri-plugin-tray等） |
+
+### 11.2 变更原因
+
+1. **用户需求**：轻量化桌面客户端，像 cc-switch 一样
+2. **目标平台**：仅 Windows，WebView2 自带无需额外安装
+3. **使用场景**：自用为主，打包体积可以接受迁移成本
+
+### 11.3 迁移范围
+
+需要迁移到 Rust 的后端模块：
+- 系统托盘（Tray）
+- 全局快捷键（Shortcut）
+- IPC通信（Tauri Command）
+- JSON存储（todos/notes/passwords/prompts/config）
+- LLM API调用（HTTP请求）
+- 节假日判断（读取 holiday-cn 数据）
+
+前端保留：
+- React + Vite + TypeScript 不变
+- Ant Design 不变
+- 只需调整 IPC 调用方式（从 `window.electronAPI` 改为 Tauri invoke）
+
+### 11.4 Rust 环境安装进度
+
+**已完成：**
+- ✅ 设置镜像源（USTC镜像）
+- ✅ 执行 `winget install Rustlang.Rustup`
+- ⏳ 环境变量尚未生效（需重启终端验证）
+
+**Cargo镜像配置待完成：**
+创建 `C:\Users\Administrator\.cargo\config.toml`：
+```toml
+[source.crates-io]
+replace-with = 'ustc'
+
+[source.ustc]
+registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
+```
+
+### 11.5 用户技术背景
+
+- Rust经验：**完全新手**，无开发经验
+- 需要在设计文档中包含 Rust 基础教程和代码模板
+
+### 11.6 下一步
+
+1. 重启终端验证 Rust 安装（`rustc --version`）
+2. 配置 Cargo 镜像
+3. 编写 Tauri 迁移设计文档（包含 Rust 新手教程）
+4. 初始化 Tauri 项目
+5. 迁移后端逻辑
+6. 调整前端 IPC
+7. 打包测试

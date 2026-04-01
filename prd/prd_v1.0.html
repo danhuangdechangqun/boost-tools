@@ -210,6 +210,12 @@
           <th>作者</th>
         </tr>
         <tr>
+          <td>v1.2</td>
+          <td>2026-04-01</td>
+          <td>技术方案调整：桌面框架从Electron改为Neutralino.js，包体从~150MB降至~5MB；文件解读功能交互方式调整为用户上传文件</td>
+          <td>Claude AI</td>
+        </tr>
+        <tr>
           <td>v1.1</td>
           <td>2026-04-01</td>
           <td>原型设计完成，补充14个功能模块详细方案，修正EARS格式，添加需求变更记录</td>
@@ -259,6 +265,20 @@
           <td>账号密码</td>
           <td>新增</td>
           <td>密码列添加眼睛图标，点击切换密码明文/密文显示</td>
+          <td><span class="priority-tag priority-p0">P0</span></td>
+        </tr>
+        <tr>
+          <td>CR-005</td>
+          <td>系统架构</td>
+          <td>调整</td>
+          <td>桌面框架从Electron调整为Neutralino.js，包体从~150MB降至~5MB，开发环境更简单</td>
+          <td><span class="priority-tag priority-p0">P0</span></td>
+        </tr>
+        <tr>
+          <td>CR-006</td>
+          <td>文件解读</td>
+          <td>调整</td>
+          <td>交互方式从"直接读取本地文件"调整为"用户上传文件"，前端解析PDF/Word内容</td>
           <td><span class="priority-tag priority-p0">P0</span></td>
         </tr>
       </table>
@@ -354,7 +374,7 @@
         <tr>
           <td><strong>桌面端</strong></td>
           <td>✅</td>
-          <td>Electron桌面应用，本地运行，系统托盘+快捷键唤起</td>
+          <td>Neutralino.js桌面应用，本地运行，系统托盘+快捷键唤起，包体~5MB轻量化</td>
         </tr>
       </table>
     </section>
@@ -405,9 +425,9 @@
       <h3>2.2 为什么现在做</h3>
       <ul>
         <li><strong>用户需求明确</strong>：开发者/办公人员日常工作场景痛点清晰，一站式解决方案需求强烈</li>
-        <li><strong>技术可行</strong>：Electron技术成熟，LLM API生态完善，本地存储方案稳定</li>
+        <li><strong>技术可行</strong>：Neutralino.js轻量框架成熟，包体仅~5MB，LLM API生态完善，本地存储方案稳定</li>
         <li><strong>节假日数据现成</strong>：holiday-cn子模块提供完整的中国节假日数据，无需额外开发</li>
-        <li><strong>轻量化趋势</strong>：用户期望"不要太臃肿、快速唤起"的轻量工具，符合当前产品设计趋势</li>
+        <li><strong>轻量化趋势</strong>：用户期望"不要太臃肿、快速唤起"的轻量工具，Neutralino.js完美契合</li>
       </ul>
     </section>
 

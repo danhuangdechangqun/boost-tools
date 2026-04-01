@@ -1,0 +1,5 @@
+{
+  "llm": { "apiUrl": "", "apiKey": "", "model": "" },
+  "shortcut": { "key": "", "enabled": false },
+  "weeklyReport": { "enabled": false, "time": "17:00", "format": "markdown" }
+}
