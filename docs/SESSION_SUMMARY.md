@@ -230,17 +230,22 @@ D:\AI\boost-tools\
   - PromptsData/PromptItem（提示词模板）
   - WeeklyReportsData/WeeklyReportItem（周报记录）
 
-### 9.3 待完成的设计展示
+### 9.3 设计文档完成情况
 
 | 序号 | 设计章节 | 状态 |
 |------|----------|------|
-| 1 | API设计（LLM调用） | ⏳ 待展示 |
-| 2 | React组件设计（全局组件） | ⏳ 待展示 |
-| 3 | 功能模块组件设计（15个模块） | ⏳ 待展示 |
-| 4 | 编写设计文档 | ⏳ 待执行 |
-| 5 | 调用writing-plans技能 | ⏳ 待执行 |
+| 1 | 服务架构设计 | ✅ 已完成 |
+| 2 | IPC接口设计 | ✅ 已完成 |
+| 3 | 数据存储设计 | ✅ 已完成 |
+| 4 | API设计（LLM调用） | ✅ 已完成 |
+| 5 | React组件设计 | ✅ 已完成 |
+| 6 | 编写设计文档 | ✅ 已完成 |
+
+**设计文档路径**：`D:\code\AI\boost-tools\docs\plans\2026-03-31-boost-tools-design.md`
+
+**下一步**：调用 `writing-plans` 技能创建实施计划
 
 ---
 
 **下次继续时，告诉Claude：**
-> "我正在编写Boost Tools设计文档，已完成服务架构、IPC接口、数据存储设计，请继续展示API设计和组件设计，然后编写完整设计文档。"
+> "Boost Tools设计文档已完成，请调用writing-plans技能创建实施计划。"

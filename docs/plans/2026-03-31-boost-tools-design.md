@@ -475,37 +475,758 @@ boost-tools/
 
 ---
 
-## 六、数据存储方案
+## 六、服务架构设计
 
-### 6.1 存储位置
+### 6.1 主进程服务模块
+
+| 服务名称 | 文件路径 | 功能描述 |
+|----------|----------|----------|
+| TrayService | `electron/services/TrayService.js` | 系统托盘管理：图标、右键菜单、点击事件 |
+| ShortcutService | `electron/services/ShortcutService.js` | 全局快捷键注册与监听 |
+| StoreService | `electron/services/StoreService.js` | JSON文件读写：config、todos、notes等 |
+| LLMService | `electron/services/LLMService.js` | 大模型API调用（Anthropic Messages格式） |
+| HolidayService | `electron/services/HolidayService.js` | 节假日判断：读取holiday-cn子模块数据 |
+| SchedulerService | `electron/services/SchedulerService.js` | 定时任务：周报自动生成、每日任务迁移 |
+| FileService | `electron/services/FileService.js` | 文件处理：上传、文本提取（Word/PDF） |
+| IPCBridge | `electron/services/IPCBridge.js` | IPC通道统一管理：注册、分发、响应 |
+
+### 6.2 渲染进程服务模块
+
+| 服务名称 | 文件路径 | 功能描述 |
+|----------|----------|----------|
+| ipcClient | `src/services/ipcClient.ts` | IPC客户端封装：统一调用主进程接口 |
+| clipboardService | `src/services/clipboardService.ts` | 剪贴板操作：复制文本、读取内容 |
+| storageService | `src/services/storageService.ts` | 前端临时存储：状态缓存、会话数据 |
+
+---
+
+## 七、IPC接口设计
+
+### 7.1 IPC通道定义
+
+采用 `{模块}:{操作}` 格式命名通道：
+
+| 模块 | 通道名称 | 操作类型 | 参数 | 返回值 |
+|------|----------|----------|------|--------|
+| system | `system:getVersion` | invoke | 无 | `{version: string}` |
+| system | `system:quit` | send | 无 | 无 |
+| config | `config:get` | invoke | 无 | `AppConfig` |
+| config | `config:set` | invoke | `AppConfig` | `{success: boolean}` |
+| todos | `todos:getAll` | invoke | 无 | `TodoData` |
+| todos | `todos:add` | invoke | `TodoItem` | `{success, id}` |
+| todos | `todos:update` | invoke | `{id, data}` | `{success}` |
+| todos | `todos:delete` | invoke | `id` | `{success}` |
+| todos | `todos:migrate` | invoke | 无 | `{success, migratedCount}` |
+| file | `file:upload` | invoke | `{path, type}` | `{content: string}` |
+| file | `file:extractText` | invoke | `{path}` | `{text: string}` |
+| prompts | `prompts:getAll` | invoke | 无 | `PromptsData` |
+| prompts | `prompts:add` | invoke | `PromptItem` | `{success, id}` |
+| prompts | `prompts:update` | invoke | `{id, data}` | `{success}` |
+| prompts | `prompts:delete` | invoke | `id` | `{success}` |
+| notes | `notes:getAll` | invoke | 无 | `NotesData` |
+| notes | `notes:add` | invoke | `NoteItem` | `{success, id}` |
+| notes | `notes:update` | invoke | `{id, data}` | `{success}` |
+| notes | `notes:delete` | invoke | `id` | `{success}` |
+| passwords | `passwords:getAll` | invoke | 无 | `PasswordsData` |
+| passwords | `passwords:add` | invoke | `PasswordItem` | `{success, id}` |
+| passwords | `passwords:update` | invoke | `{id, data}` | `{success}` |
+| passwords | `passwords:delete` | invoke | `id` | `{success}` |
+| holiday | `holiday:isHoliday` | invoke | `date` | `{isHoliday: boolean, name?: string}` |
+| holiday | `holiday:getNextWorkday` | invoke | `date` | `{date: string}` |
+| shortcut | `shortcut:register` | invoke | `{key: string}` | `{success}` |
+| shortcut | `shortcut:unregister` | invoke | 无 | `{success}` |
+| scheduler | `scheduler:setWeeklyReport` | invoke | `{enabled, time}` | `{success}` |
+| llm | `llm:call` | invoke | `{prompt, options}` | `LLMResponse` |
+| llm | `llm:testConnection` | invoke | 无 | `{success, error?: string}` |
+| llm | `llm:summarizeFile` | invoke | `{content, type}` | `{points: string[]}` |
+| llm | `llm:generateFakeData` | invoke | `{fields, count, format}` | `{data: string}` |
+| llm | `llm:generateWeeklyReport` | invoke | `{todos}` | `{report: string}` |
+
+### 7.2 IPC响应格式规范
+
+```typescript
+// IPCResponse<T> - 统一响应格式
+interface IPCResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+// 示例：成功响应
+{ success: true, data: { id: "uuid-xxx" } }
+
+// 示例：失败响应
+{ success: false, error: { code: "STORE_READ_ERROR", message: "文件读取失败" } }
+```
+
+### 7.3 IPC通信机制
+
+```dot
+digraph ipc_flow {
+    "渲染进程" [shape=box];
+    "ipcClient.ts" [shape=box];
+    "preload.js" [shape=box];
+    "IPCBridge.js" [shape=box];
+    "主进程服务" [shape=box];
+
+    "渲染进程" -> "ipcClient.ts" [label="调用方法"];
+    "ipcClient.ts" -> "preload.js" [label="ipcRenderer.invoke"];
+    "preload.js" -> "IPCBridge.js" [label="ipcMain.handle"];
+    "IPCBridge.js" -> "主进程服务" [label="分发到具体Service"];
+    "主进程服务" -> "IPCBridge.js" [label="返回结果"];
+    "IPCBridge.js" -> "preload.js" [label="resolve"];
+    "preload.js" -> "ipcClient.ts" [label="Promise返回"];
+    "ipcClient.ts" -> "渲染进程" [label="响应数据"];
+}
+```
+
+---
+
+## 八、LLM API设计
+
+### 8.1 API调用规范
+
+采用 **Anthropic Messages原生格式**：
+
+```typescript
+// LLMService.js - 大模型调用服务
+class LLMService {
+  constructor(config: LLMConfig) {
+    this.apiUrl = config.apiUrl;      // 用户配置的API地址
+    this.apiKey = config.apiKey;      // 用户配置的API Key
+    this.model = config.model;        // 用户手动输入的模型名
+  }
+
+  // 通用调用方法
+  async call(prompt: string, options?: LLMOptions): Promise<LLMResponse> {
+    const response = await fetch(`${this.apiUrl}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: options?.maxTokens || 4096,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    return this.parseResponse(response);
+  }
+
+  // 文件解读专用
+  async summarizeFile(content: string, fileType: string): Promise<string[]> {
+    const prompt = `请从以下${fileType}文档中提取关键重点，每条重点需标注来源位置。
+输出格式：【重点N】内容描述（来源：章节/页码）
+
+---
+${content}`;
+    const res = await this.call(prompt);
+    return this.extractPoints(res.content);
+  }
+
+  // 假数据生成专用
+  async generateFakeData(fields: FieldDef[], count: number, format: string): Promise<string> {
+    const prompt = `请生成${count}条测试数据，字段如下：
+${fields.map(f => `- ${f.name}: ${f.description}`).join('\n')}
+输出格式：${format}（制表符分隔请用真实Tab字符）`;
+    const res = await this.call(prompt);
+    return res.content;
+  }
+
+  // 周报生成专用
+  async generateWeeklyReport(completedTodos: TodoItem[]): Promise<string> {
+    const prompt = `请根据以下本周已完成的任务，生成一份周报摘要：
+${completedTodos.map(t => `- [${t.completeTime}] ${t.title}`).join('\n')}
+要求：简洁、突出成果、可复制使用，Markdown格式。`;
+    const res = await this.call(prompt);
+    return res.content;
+  }
+
+  // 连接测试
+  async testConnection(): Promise<{success: boolean, error?: string}> {
+    try {
+      await this.call('Hello', { maxTokens: 10 });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+}
+
+// 类型定义
+interface LLMConfig {
+  apiUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+interface LLMOptions {
+  maxTokens?: number;
+}
+
+interface LLMResponse {
+  content: string;
+  usage?: { inputTokens: number; outputTokens: number };
+}
+```
+
+### 8.2 LLM配置数据结构
+
+```json
+// config.json - llm配置部分
+{
+  "llm": {
+    "apiUrl": "https://api.anthropic.com",
+    "apiKey": "sk-ant-xxx",
+    "model": "claude-sonnet-4-6"
+  }
+}
+```
+
+**配置说明**：
+- API地址：用户手动填写（支持自定义endpoint）
+- API Key：密码输入框，不明文显示
+- 模型名称：手动输入框（非下拉选择，用户已确认）
+
+---
+
+## 九、React组件设计
+
+### 9.1 全局布局组件
+
+```
+src/components/Layout/
+├── MainLayout.tsx         # 主布局（左侧导航 + 右侧内容）
+├── Sidebar.tsx            # 左侧分组导航栏
+├── ContentArea.tsx        # 右侧内容区域
+├── Header.tsx             # 顶部标题栏
+└── GroupNav.tsx           # 分组导航卡片列表
+```
+
+**MainLayout结构**：
+```tsx
+interface MainLayoutProps {
+  children: React.ReactNode;
+}
+
+const MainLayout: React.FC<MainLayoutProps> = ({ children }) => (
+  <div className="main-layout" style={{ display: 'flex', height: '100vh' }}>
+    <Sidebar />
+    <ContentArea>{children}</ContentArea>
+  </div>
+);
+```
+
+**Sidebar结构**：
+```tsx
+const Sidebar: React.FC = () => {
+  const groups = [
+    { id: 'ai', icon: '🤖', name: 'AI辅助' },
+    { id: 'expression', icon: '⚙️', name: '表达式' },
+    { id: 'format', icon: '📝', name: '格式化' },
+    { id: 'tools', icon: '🔧', name: '工具' },
+    { id: 'data', icon: '📁', name: '数据' },
+  ];
+
+  return (
+    <div className="sidebar" style={{ width: 80, background: '#F9FAFB' }}>
+      <GroupNav groups={groups} />
+      <div className="sidebar-footer">
+        <SettingsButton />
+      </div>
+    </div>
+  );
+};
+```
+
+### 9.2 共用UI组件
+
+```
+src/components/common/
+├── CopyButton.tsx          # 一键复制按钮（带成功提示）
+├── CardView.tsx            # 功能卡片视图
+├── ModalForm.tsx           # 弹窗表单（基于Ant Design Modal）
+├── SearchInput.tsx         # 搜索输入框
+├── LoadingOverlay.tsx      # 加载遮罩层（LLM调用时显示）
+├── EmptyState.tsx          # 空状态提示
+└── ConfirmDialog.tsx       # 确认对话框（删除操作）
+```
+
+**CopyButton组件**：
+```tsx
+interface CopyButtonProps {
+  text: string;
+  onSuccess?: () => void;
+}
+
+const CopyButton: React.FC<CopyButtonProps> = ({ text, onSuccess }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    onSuccess?.();
+  };
+
+  return (
+    <Button icon={copied ? <CheckOutlined /> : <CopyOutlined />} onClick={handleCopy}>
+      {copied ? '已复制' : '复制'}
+    </Button>
+  );
+};
+```
+
+### 9.3 AI辅助组组件
+
+| 模块 | 组件路径 | 核心组件 |
+|------|----------|----------|
+| TodoList周报 | `src/views/ai/TodoPage/` | TodoList, TodoColumn, TodoItem, TodoForm, WeeklyReportModal |
+| 文件解读 | `src/views/ai/FileReadPage/` | FileUploader, FilePreview, KeyPointsList |
+| 假数据生成 | `src/views/ai/FakeDataPage/` | FieldInput, FieldList, FormatSelector, ResultTable |
+| 提示词模板 | `src/views/ai/PromptsPage/` | PromptList, PromptCard, PromptForm, PlaceholderFillModal |
+
+**TodoList组件详细结构**：
+```
+src/views/ai/TodoPage/
+├── TodoPage.tsx            # 页面主入口
+├── TodoList.tsx            # 三栏列表容器
+├── TodoColumn.tsx          # 单栏（今日/明日/下周）
+├── TodoItem.tsx            # 单个任务项
+├── TodoForm.tsx            # 新增/编辑任务表单
+├── TodoDetailModal.tsx     # 任务详情弹窗（双击触发）
+├── WeeklyReportModal.tsx   # 周报生成弹窗
+├── CompletedSection.tsx    # 本周已完成区域（绿色背景）
+└── PendingSection.tsx      # 未完成待办区域（黄色背景）
+```
+
+```tsx
+// TodoList.tsx - 三栏布局
+interface TodoListProps {
+  todayTodos: TodoItem[];
+  tomorrowTodos: TodoItem[];
+  nextWeekTodos: TodoItem[];
+  onDragEnd: (result: DragResult) => void;
+}
+
+const TodoList: React.FC<TodoListProps> = ({ todayTodos, tomorrowTodos, nextWeekTodos, onDragEnd }) => (
+  <DragDropContext onDragEnd={onDragEnd}>
+    <div className="todo-list-container" style={{ display: 'flex', gap: 16 }}>
+      <TodoColumn title="今日待办" todos={todayTodos} bgColor="#fff" droppableId="today" />
+      <TodoColumn title="明日待办" todos={tomorrowTodos} bgColor="#fff" droppableId="tomorrow" />
+      <TodoColumn title="下周计划" todos={nextWeekTodos} bgColor="#fff" droppableId="nextWeek" />
+    </div>
+    <PendingSection />      {/* 未完成待办（黄色背景 #FFF3CD） */}
+    <CompletedSection />    {/* 本周已完成（绿色背景 #D4EDDA） */}
+  </DragDropContext>
+);
+```
+
+### 9.4 表达式生成组组件
+
+| 模块 | 组件路径 | 核心组件 |
+|------|----------|----------|
+| Aviator表达式 | `src/views/expression/AviatorPage/` | FieldPanel, OperatorPanel, ExpressionPreview, AviatorDocs |
+| Cron表达式 | `src/views/expression/CronPage/` | CronSelector, CronPresets, CronPreview |
+| 正则表达式 | `src/views/expression/RegexPage/` | RegexPresets, RegexTester, RegexPreview |
+
+**Cron组件详细结构**：
+```
+src/views/expression/CronPage/
+├── CronPage.tsx            # 页面主入口
+├── CronSelector.tsx        # 六字段下拉选择器（秒/分/时/日/月/周）
+├── CronPresets.tsx         # 预设快捷按钮组
+├── CronPreview.tsx         # 表达式显示 + 含义说明
+└── types.ts                # 类型定义
+```
+
+```tsx
+// CronSelector.tsx
+interface CronValue {
+  second: string;
+  minute: string;
+  hour: string;
+  day: string;
+  month: string;
+  week: string;
+}
+
+interface CronSelectorProps {
+  value: CronValue;
+  onChange: (value: CronValue) => void;
+}
+
+const CronSelector: React.FC<CronSelectorProps> = ({ value, onChange }) => (
+  <div className="cron-selector" style={{ display: 'flex', gap: 8 }}>
+    {['second', 'minute', 'hour', 'day', 'month', 'week'].map(field => (
+      <Select key={field} label={field} value={value[field]} onChange={(v) => onChange({...value, [field]: v})} />
+    ))}
+  </div>
+);
+```
+
+### 9.5 格式化组组件
+
+| 模块 | 组件路径 | 核心组件 |
+|------|----------|----------|
+| JSON美化 | `src/views/format/JsonPage/` | JsonInput, JsonOutput, IndentSelector, JsonValidator |
+| XML美化 | `src/views/format/XmlPage/` | XmlInput, XmlOutput, XmlValidator |
+| 文本比较 | `src/views/format/TextComparePage/` | TextPanel, DiffViewer, DiffLine |
+
+**文本比较组件详细结构**：
+```
+src/views/format/TextComparePage/
+├── TextComparePage.tsx     # 页面主入口
+├── TextPanel.tsx           # 单侧文本输入面板
+├── DiffViewer.tsx          # 差异对比视图（同步滚动）
+├── DiffLine.tsx            # 单行差异显示
+└── diffUtils.ts            # 差异计算算法（基于diff-match-patch）
+```
+
+```tsx
+// DiffLine.tsx
+interface DiffLineProps {
+  type: 'add' | 'delete' | 'modify' | 'equal';
+  content: string;
+  lineNumber: number;
+}
+
+const DiffLine: React.FC<DiffLineProps> = ({ type, content, lineNumber }) => {
+  const bgColor = {
+    add: '#D4EDDA',      // 绿色
+    delete: '#F8D7DA',   // 红色
+    modify: '#FFF3CD',   // 黄色
+    equal: 'transparent'
+  };
+
+  return (
+    <div className="diff-line" style={{ backgroundColor: bgColor[type], display: 'flex' }}>
+      <span className="line-number" style={{ width: 40 }}>{lineNumber}</span>
+      <span className="content">{content}</span>
+    </div>
+  );
+};
+```
+
+### 9.6 工具组组件
+
+| 模块 | 组件路径 | 核心组件 |
+|------|----------|----------|
+| UUID生成 | `src/views/tools/UuidPage/` | UuidGenerator, UuidOptions, UuidList |
+| 加密工具 | `src/views/tools/CryptoPage/` | CryptoInput, CryptoResult, FileHashUploader |
+| 数据填充模板 | `src/views/tools/TemplatePage/` | TemplateInput, ModeSelector, TemplateOutput |
+
+**UUID组件详细结构**：
+```
+src/views/tools/UuidPage/
+├── UuidPage.tsx            # 页面主入口
+├── UuidGenerator.tsx       # 生成逻辑组件
+├── UuidOptions.tsx         # 配置选项（大小写、横线）
+├── UuidList.tsx            # 生成的UUID列表
+└── uuidUtils.ts            # UUID生成工具函数
+```
+
+```tsx
+// UuidOptions.tsx
+interface UuidOptionsState {
+  uppercase: boolean;
+  keepHyphen: boolean;
+  count: number;
+}
+
+interface UuidOptionsProps {
+  value: UuidOptionsState;
+  onChange: (value: UuidOptionsState) => void;
+}
+
+const UuidOptions: React.FC<UuidOptionsProps> = ({ value, onChange }) => (
+  <div className="uuid-options">
+    <InputNumber label="生成条数" value={value.count} min={1} max={100} onChange={(v) => onChange({...value, count: v})} />
+    <Switch label="大写" checked={value.uppercase} onChange={(v) => onChange({...value, uppercase: v})} />
+    <Switch label="保留横线" checked={value.keepHyphen} onChange={(v) => onChange({...value, keepHyphen: v})} />
+  </div>
+);
+```
+
+### 9.7 数据管理组组件
+
+| 模块 | 组件路径 | 核心组件 |
+|------|----------|----------|
+| 笔记 | `src/views/data/NotesPage/` | NotesList, NoteEditor, NotePreview, NoteForm, NoteDetailModal |
+| 账号密码 | `src/views/data/PasswordsPage/` | PasswordsList, PasswordCard, PasswordDetail, PasswordForm, PasswordToggle |
+
+**笔记组件详细结构**：
+```
+src/views/data/NotesPage/
+├── NotesPage.tsx           # 页面主入口
+├── NotesList.tsx           # 左侧笔记列表
+├── NoteEditor.tsx          # 右侧编辑区
+├── NotePreview.tsx         # Markdown预览
+├── NoteForm.tsx            # 新增/编辑表单弹窗
+├── NoteDetailModal.tsx     # 详情查看弹窗（双击触发）
+└── FormatSwitch.tsx        # 纯文本/Markdown切换
+```
+
+```tsx
+// NotesList.tsx
+interface NotesListProps {
+  notes: NoteItem[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  searchKeyword: string;
+}
+
+const NotesList: React.FC<NotesListProps> = ({ notes, selectedId, onSelect, onDelete, searchKeyword }) => {
+  const filteredNotes = notes.filter(n =>
+    n.title.includes(searchKeyword) || n.content.includes(searchKeyword)
+  );
+
+  return (
+    <div className="notes-list" style={{ width: 240, borderRight: '1px solid #E5E7EB' }}>
+      <SearchInput placeholder="搜索笔记" />
+      {filteredNotes.map(note => (
+        <NoteCard
+          key={note.id}
+          note={note}
+          selected={note.id === selectedId}
+          onClick={() => onSelect(note.id)}
+          onDelete={() => onDelete(note.id)}
+        />
+      ))}
+    </div>
+  );
+};
+```
+
+**账号密码组件详细结构**：
+```
+src/views/data/PasswordsPage/
+├── PasswordsPage.tsx       # 页面主入口
+├── PasswordsList.tsx       # 密码列表
+├── PasswordCard.tsx        # 单条密码卡片（展开/收起）
+├── PasswordDetail.tsx      # 详情（账号、密码、地址、备注）
+├── PasswordForm.tsx        # 新增/编辑表单弹窗
+└── PasswordToggle.tsx      # 密码显示/隐藏切换（眼睛图标）
+```
+
+```tsx
+// PasswordToggle.tsx
+interface PasswordToggleProps {
+  password: string;
+  visible: boolean;
+  onToggle: () => void;
+}
+
+const PasswordToggle: React.FC<PasswordToggleProps> = ({ password, visible, onToggle }) => (
+  <div className="password-toggle" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <span className="password-value">
+      {visible ? password : '••••••••'}
+    </span>
+    <Button icon={visible ? <EyeInvisibleOutlined /> : <EyeOutlined />} onClick={onToggle} />
+    <CopyButton text={password} />
+  </div>
+);
+```
+
+### 9.8 设置页面组件
+
+```
+src/views/settings/
+├── SettingsPage.tsx        # 设置页面主入口
+├── LLMSettings.tsx         # 大模型API配置
+├── ShortcutSettings.tsx    # 快捷键设置
+├── WeeklyReportSettings.tsx # 周报自动生成设置
+└── TestConnectionButton.tsx # API连接测试按钮
+```
+
+```tsx
+// LLMSettings.tsx
+interface LLMConfig {
+  apiUrl: string;
+  apiKey: string;
+  model: string;          // 手动输入，非下拉
+}
+
+interface LLMSettingsProps {
+  config: LLMConfig;
+  onSave: (config: LLMConfig) => void;
+}
+
+const LLMSettings: React.FC<LLMSettingsProps> = ({ config, onSave }) => (
+  <div className="llm-settings">
+    <Form>
+      <Form.Item label="API地址">
+        <Input value={config.apiUrl} onChange={(e) => onSave({...config, apiUrl: e.target.value})} />
+      </Form.Item>
+      <Form.Item label="API Key">
+        <Input.Password value={config.apiKey} onChange={(e) => onSave({...config, apiKey: e.target.value})} />
+      </Form.Item>
+      <Form.Item label="模型名称">
+        <Input value={config.model} placeholder="如: claude-sonnet-4-6" onChange={(e) => onSave({...config, model: e.target.value})} />
+      </Form.Item>
+      <Form.Item>
+        <TestConnectionButton config={config} />
+      </Form.Item>
+    </Form>
+  </div>
+);
+```
+
+---
+
+## 十、数据存储方案
+
+### 10.1 存储位置
 
 应用目录下 `data/` 文件夹
 
-### 6.2 文件列表
+### 10.2 文件列表与数据结构
 
-| 文件名 | 内容 |
-|--------|------|
-| config.json | 全局配置 |
-| todos.json | TodoList数据 |
-| notes.json | 笔记数据 |
-| passwords.json | 账号密码数据 |
-| prompts.json | 提示词模板 |
-| weekly-reports.json | 历史周报记录 |
+| 文件名 | 内容 | TypeScript类型 |
+|--------|------|----------------|
+| config.json | 全局配置 | `AppConfig` |
+| todos.json | TodoList数据 | `TodoData` |
+| notes.json | 笔记数据 | `NotesData` |
+| passwords.json | 账号密码数据 | `PasswordsData` |
+| prompts.json | 提示词模板 | `PromptsData` |
+| weekly-reports.json | 历史周报记录 | `WeeklyReportsData` |
 
-### 6.3 同步提示
+**AppConfig完整结构**：
+```typescript
+interface AppConfig {
+  llm: {
+    apiUrl: string;
+    apiKey: string;
+    model: string;
+  };
+  shortcut: {
+    key: string;           // 如 "Ctrl+Shift+B"
+    enabled: boolean;
+  };
+  weeklyReport: {
+    enabled: boolean;
+    time: string;          // 如 "17:00"
+    format: 'text' | 'markdown';
+  };
+}
+```
+
+**TodoData完整结构**：
+```typescript
+interface TodoData {
+  todos: TodoItem[];
+}
+
+interface TodoItem {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'pending' | 'completed';
+  dueDate: string;         // YYYY-MM-DD
+  group: 'today' | 'tomorrow' | 'nextWeek' | 'pending' | 'completed';
+  createTime: string;      // ISO 8601
+  completeTime?: string;   // ISO 8601
+}
+```
+
+**NotesData完整结构**：
+```typescript
+interface NotesData {
+  notes: NoteItem[];
+}
+
+interface NoteItem {
+  id: string;
+  title: string;
+  content: string;
+  format: 'text' | 'markdown';
+  createTime: string;
+  updateTime: string;
+}
+```
+
+**PasswordsData完整结构**：
+```typescript
+interface PasswordsData {
+  passwords: PasswordItem[];
+}
+
+interface PasswordItem {
+  id: string;
+  name: string;
+  account: string;
+  password: string;
+  url?: string;
+  remark?: string;
+  createTime: string;
+}
+```
+
+**PromptsData完整结构**：
+```typescript
+interface PromptsData {
+  prompts: PromptItem[];
+}
+
+interface PromptItem {
+  id: string;
+  name: string;
+  template: string;        // 含 {{placeholder}} 占位符
+  placeholders: PlaceholderDef[];
+  createTime: string;
+}
+
+interface PlaceholderDef {
+  name: string;
+  description: string;
+}
+```
+
+**WeeklyReportsData完整结构**：
+```typescript
+interface WeeklyReportsData {
+  reports: WeeklyReportItem[];
+}
+
+interface WeeklyReportItem {
+  id: string;
+  weekStart: string;       // 周一日期 YYYY-MM-DD
+  weekEnd: string;         // 周五/周日日期
+  content: string;         // 周报内容
+  format: 'text' | 'markdown';
+  createTime: string;
+}
+```
+
+### 10.3 同步提示
 
 用户可将 `data/` 目录加入Git同步到GitHub，实现跨设备数据同步。
 
 ---
 
-## 七、附录
+## 十一、附录
 
-### 7.1 依赖资源
+### 11.1 依赖资源
 
 - holiday-cn子模块：https://github.com/NateScarlet/holiday-cn.git
 - aviator.md：Aviator表达式语法参考（已置于项目根目录）
 
-### 7.2 后续扩展考虑
+### 11.2 原型设计优化项
+
+| 序号 | 功能模块 | 问题描述 | 优化方案 |
+|------|----------|----------|----------|
+| 1 | 假数据生成 | 表格格式输出为Markdown格式，粘贴到Excel后变为三行一列而非两列两行 | 改为输出真正的TSV/制表符分隔格式，LLM prompt明确要求使用真实Tab字符 |
+| 2 | 所有功能页面 | 左侧分组导航选中后视觉高亮不够明显 | 增加选中状态的背景色(#E5E7EB)、边框、图标颜色变化的视觉强化 |
+| 3 | 笔记 | 缺少删除笔记、查看详情、编辑修改功能 | 添加删除按钮、双击查看详情弹窗、编辑保存功能 |
+| 4 | 账号密码 | 密码虽隐藏但无法查看明文 | 添加眼睛图标，点击切换密码显示/隐藏 |
+
+### 11.3 后续扩展考虑
 
 - 账号密码加密存储选项
 - 更多正则表达式预设
