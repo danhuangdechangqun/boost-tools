@@ -65,12 +65,27 @@
 
     /* 未完成待办样式 */
     .overdue-item { background: #FEF3C7 !important; border-color: #F59E0B !important; }
+
+    /* ========== Focus模式样式 ========== */
+    body.focus-mode #tray-bar,
+    body.focus-mode .focus-mask {
+      pointer-events: none;
+      opacity: 0.3;
+    }
+    body.focus-mode .focus-mask::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.1);
+      z-index: 10;
+    }
+    body.focus-mode #sidebar { opacity: 0.5; pointer-events: none; }
   </style>
 </head>
 <body class="bg-bg min-h-screen font-jakarta">
 
   <!-- 系统托盘模拟 -->
-  <div id="tray-bar" class="fixed top-0 right-0 h-8 bg-sidebar border-b border-border flex items-center px-2 gap-2 z-50">
+  <div id="tray-bar" class="focus-mask fixed top-0 right-0 h-8 bg-sidebar border-b border-border flex items-center px-2 gap-2 z-50">
     <div class="w-4 h-4 bg-primary rounded flex items-center justify-center">
       <i data-lucide="zap" class="w-3 h-3 text-white"></i>
     </div>
@@ -81,7 +96,7 @@
   <div class="flex h-screen pt-8">
 
     <!-- 左侧分组导航 -->
-    <nav id="sidebar" class="w-16 bg-sidebar flex flex-col items-center py-4 gap-2 border-r border-border">
+    <nav id="sidebar" class="focus-mask w-16 bg-sidebar flex flex-col items-center py-4 gap-2 border-r border-border">
 
       <button onclick="switchGroup('ai')" id="nav-ai" class="nav-btn w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1 transition-smooth cursor-pointer hover:bg-sidebarHover bg-active border-2 border-activeBorder" title="AI辅助">
         <i data-lucide="bot" class="w-5 h-5 text-primary"></i>
@@ -120,7 +135,7 @@
     <main class="flex-1 overflow-hidden">
 
       <!-- 分组卡片视图 -->
-      <div id="group-view" class="h-full p-6">
+      <div id="group-view" class="focus-mask h-full p-6">
 
         <!-- AI辅助组 -->
         <div id="group-ai" class="group-content">
@@ -236,65 +251,1475 @@
 
       </div>
 
-      <!-- 通用占位页面 -->
+      <!-- 文件解读功能页面 -->
       <div id="page-file-read" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border">
-          <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button>
-          <h2 class="text-lg font-semibold text-text">文件解读</h2>
+        <!-- 页面头部 -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer">
+              <i data-lucide="arrow-left" class="w-5 h-5 text-text"></i>
+            </button>
+            <h2 class="text-lg font-semibold text-text">文件解读</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="clearAllFiles()" class="px-3 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer">
+              <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>清空
+            </button>
+          </div>
         </div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="file-text" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+
+        <!-- 主内容区 -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-2 gap-4 h-full">
+
+            <!-- 左侧：文件上传与列表 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="upload" class="w-5 h-5 text-primary"></i>
+                文件上传
+              </h3>
+
+              <!-- 拖拽上传区域 -->
+              <div id="file-drop-zone" class="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer transition-smooth hover:border-primary hover:bg-active mb-4" onclick="triggerFileUpload()" ondragover="handleFileDragOver(event)" ondrop="handleFileDrop(event)">
+                <i data-lucide="file-plus" class="w-12 h-12 mx-auto mb-3 text-muted opacity-50"></i>
+                <p class="text-sm text-muted">拖拽文件到此处，或点击上传</p>
+                <p class="text-xs text-muted mt-2">支持 Word (.doc/.docx)、PDF (.pdf) 格式</p>
+                <input type="file" id="file-input" class="hidden" accept=".doc,.docx,.pdf" multiple onchange="handleFileSelect(event)">
+              </div>
+
+              <!-- 已上传文件列表 -->
+              <div class="flex-1 overflow-auto">
+                <div class="flex items-center justify-between mb-3">
+                  <span class="text-sm text-muted">已上传文件</span>
+                  <span class="text-xs text-muted bg-gray-100 px-2 py-1 rounded" id="file-count">0个文件</span>
+                </div>
+                <div class="space-y-2" id="file-list">
+                  <!-- 空状态 -->
+                  <div id="file-empty-state" class="text-center py-8 text-muted">
+                    <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
+                    <p class="text-sm">暂无文件</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 解读按钮 -->
+              <button onclick="analyzeFiles()" class="mt-4 px-4 py-3 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer flex items-center justify-center gap-2">
+                <i data-lucide="sparkles" class="w-5 h-5"></i>
+                开始AI解读
+              </button>
+            </div>
+
+            <!-- 右侧：解读结果 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="file-text" class="w-5 h-5 text-primary"></i>
+                解读结果
+              </h3>
+
+              <!-- 结果展示区 -->
+              <div class="flex-1 overflow-auto" id="result-area">
+                <!-- 空状态 -->
+                <div id="result-empty-state" class="text-center py-16 text-muted">
+                  <i data-lucide="brain" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
+                  <p class="text-sm">上传文件后点击"开始AI解读"</p>
+                  <p class="text-xs mt-2">AI将提取重点内容并标注来源</p>
+                </div>
+
+                <!-- 加载状态 -->
+                <div id="result-loading" class="hidden text-center py-16">
+                  <div class="w-12 h-12 mx-auto mb-4 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                  <p class="text-sm text-muted">AI正在解读文件内容...</p>
+                </div>
+
+                <!-- 结果内容 -->
+                <div id="result-content" class="hidden space-y-4">
+                  <!-- 结果将动态插入 -->
+                </div>
+              </div>
+
+              <!-- 操作按钮 -->
+              <div class="mt-4 flex gap-2" id="result-actions" class="hidden">
+                <button onclick="copyResult()" class="px-3 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer flex items-center gap-2">
+                  <i data-lucide="copy" class="w-4 h-4"></i>
+                  复制结果
+                </button>
+                <button onclick="exportResult()" class="px-3 py-2 bg-secondary text-white rounded-lg font-medium transition-smooth hover:bg-secondary/80 cursor-pointer flex items-center gap-2">
+                  <i data-lucide="download" class="w-4 h-4"></i>
+                  导出
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
+      <!-- 假数据生成功能页面 -->
       <div id="page-fake-data" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">假数据生成</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="table-2" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <!-- 页面头部 -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer">
+              <i data-lucide="arrow-left" class="w-5 h-5 text-text"></i>
+            </button>
+            <h2 class="text-lg font-semibold text-text">假数据生成</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="generateAllFakeData()" class="px-4 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer">
+              <i data-lucide="sparkles" class="w-4 h-4 inline mr-1"></i>AI生成
+            </button>
+          </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-2 gap-4">
+
+            <!-- 左侧：字段定义 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-text flex items-center gap-2">
+                  <i data-lucide="list" class="w-5 h-5 text-primary"></i>
+                  字段定义
+                </h3>
+                <button onclick="addField()" class="px-3 py-1 bg-gray-100 text-text rounded text-sm hover:bg-gray-200 cursor-pointer">
+                  <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>添加字段
+                </button>
+              </div>
+
+              <!-- 字段列表 -->
+              <div id="field-list" class="flex-1 space-y-2 overflow-auto">
+                <div class="field-item p-3 bg-gray-50 rounded-lg border border-border">
+                  <div class="grid grid-cols-3 gap-2">
+                    <input type="text" placeholder="字段名" value="name" class="px-2 py-1.5 bg-white border border-border rounded text-sm focus:border-primary focus:outline-none">
+                    <select class="px-2 py-1.5 bg-white border border-border rounded text-sm cursor-pointer">
+                      <option value="name">姓名</option>
+                      <option value="email">邮箱</option>
+                      <option value="phone">手机号</option>
+                      <option value="address">地址</option>
+                      <option value="company">公司</option>
+                      <option value="date">日期</option>
+                      <option value="number">数字</option>
+                      <option value="id">ID</option>
+                    </select>
+                    <button onclick="removeField(this)" class="px-2 py-1.5 bg-red-50 text-red-500 rounded text-sm hover:bg-red-100 cursor-pointer">删除</button>
+                  </div>
+                </div>
+                <div class="field-item p-3 bg-gray-50 rounded-lg border border-border">
+                  <div class="grid grid-cols-3 gap-2">
+                    <input type="text" placeholder="字段名" value="email" class="px-2 py-1.5 bg-white border border-border rounded text-sm focus:border-primary focus:outline-none">
+                    <select class="px-2 py-1.5 bg-white border border-border rounded text-sm cursor-pointer">
+                      <option value="name">姓名</option>
+                      <option value="email" selected>邮箱</option>
+                      <option value="phone">手机号</option>
+                      <option value="address">地址</option>
+                      <option value="company">公司</option>
+                      <option value="date">日期</option>
+                      <option value="number">数字</option>
+                      <option value="id">ID</option>
+                    </select>
+                    <button onclick="removeField(this)" class="px-2 py-1.5 bg-red-50 text-red-500 rounded text-sm hover:bg-red-100 cursor-pointer">删除</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 生成数量 -->
+              <div class="mt-4 flex items-center gap-4">
+                <label class="text-sm text-text">生成数量</label>
+                <input type="number" id="fake-data-count" value="10" min="1" max="100" class="w-20 px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+                <label class="text-sm text-text">输出格式</label>
+                <select id="fake-data-format" class="px-3 py-2 bg-gray-50 border border-border rounded-lg text-text cursor-pointer">
+                  <option value="json">JSON</option>
+                  <option value="table">表格</option>
+                  <option value="csv">CSV</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 右侧：生成结果 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-text flex items-center gap-2">
+                  <i data-lucide="file-output" class="w-5 h-5 text-primary"></i>
+                  生成结果
+                </h3>
+                <div class="flex items-center gap-2">
+                  <button onclick="copyFakeData()" class="px-3 py-1 bg-secondary text-white rounded text-sm cursor-pointer">
+                    <i data-lucide="copy" class="w-3 h-3 inline mr-1"></i>复制
+                  </button>
+                  <button onclick="downloadFakeData()" class="px-3 py-1 bg-gray-100 text-text rounded text-sm cursor-pointer">
+                    <i data-lucide="download" class="w-3 h-3 inline mr-1"></i>下载
+                  </button>
+                </div>
+              </div>
+
+              <div id="fake-data-result" class="flex-1 bg-gray-50 rounded-lg p-3 border border-border overflow-auto font-mono text-sm text-text">
+                <span class="text-muted">点击"AI生成"按钮生成假数据</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
+      <!-- 提示词模板功能页面 -->
       <div id="page-prompts" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">提示词模板</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="message-square" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <!-- 页面头部 -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer">
+              <i data-lucide="arrow-left" class="w-5 h-5 text-text"></i>
+            </button>
+            <h2 class="text-lg font-semibold text-text">提示词模板</h2>
+          </div>
+          <button onclick="createNewPrompt()" class="px-4 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer">
+            <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>新建模板
+          </button>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-3 gap-4">
+
+            <!-- 左侧：模板列表 -->
+            <div class="bg-card rounded-xl border border-border p-4">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-text flex items-center gap-2">
+                  <i data-lucide="folder" class="w-5 h-5 text-primary"></i>
+                  我的模板
+                </h3>
+                <input type="text" placeholder="搜索..." class="w-24 px-2 py-1 bg-gray-50 border border-border rounded text-sm focus:border-primary focus:outline-none">
+              </div>
+
+              <div class="space-y-2" id="prompt-list">
+                <div onclick="selectPrompt('code')" class="prompt-item p-3 bg-active border border-activeBorder rounded-lg cursor-pointer">
+                  <div class="flex items-center gap-2 mb-1">
+                    <i data-lucide="code" class="w-4 h-4 text-primary"></i>
+                    <span class="font-medium text-text text-sm">代码审查助手</span>
+                  </div>
+                  <p class="text-xs text-muted">审查代码质量、安全性和最佳实践</p>
+                </div>
+                <div onclick="selectPrompt('doc')" class="prompt-item p-3 bg-gray-50 border border-border rounded-lg cursor-pointer hover:border-primary transition-smooth">
+                  <div class="flex items-center gap-2 mb-1">
+                    <i data-lucide="file-text" class="w-4 h-4 text-primary"></i>
+                    <span class="font-medium text-text text-sm">文档生成器</span>
+                  </div>
+                  <p class="text-xs text-muted">根据代码自动生成API文档</p>
+                </div>
+                <div onclick="selectPrompt('translate')" class="prompt-item p-3 bg-gray-50 border border-border rounded-lg cursor-pointer hover:border-primary transition-smooth">
+                  <div class="flex items-center gap-2 mb-1">
+                    <i data-lucide="languages" class="w-4 h-4 text-primary"></i>
+                    <span class="font-medium text-text text-sm">翻译助手</span>
+                  </div>
+                  <p class="text-xs text-muted">中英文互译，保持专业术语</p>
+                </div>
+                <div onclick="selectPrompt('summarize')" class="prompt-item p-3 bg-gray-50 border border-border rounded-lg cursor-pointer hover:border-primary transition-smooth">
+                  <div class="flex items-center gap-2 mb-1">
+                    <i data-lucide="list" class="w-4 h-4 text-primary"></i>
+                    <span class="font-medium text-text text-sm">内容摘要</span>
+                  </div>
+                  <p class="text-xs text-muted">提取长文本的核心要点</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 中间：模板详情 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="edit-3" class="w-5 h-5 text-primary"></i>
+                模板内容
+              </h3>
+
+              <div class="mb-4">
+                <label class="block text-sm text-text mb-2">模板名称</label>
+                <input type="text" id="prompt-name" value="代码审查助手" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+              </div>
+
+              <div class="flex-1 flex flex-col">
+                <label class="block text-sm text-text mb-2">提示词内容（使用 {{变量}} 作为占位符）</label>
+                <textarea id="prompt-content" class="flex-1 w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text font-mono text-sm resize-none focus:border-primary focus:outline-none">请对以下代码进行审查：
+
+语言：{{language}}
+代码：
+```
+{{code}}
+```
+
+请从以下方面进行审查：
+1. 代码质量和可读性
+2. 潜在的安全漏洞
+3. 性能优化建议
+4. 最佳实践建议</textarea>
+              </div>
+
+              <div class="mt-3 flex gap-2">
+                <button onclick="savePrompt()" class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium cursor-pointer">
+                  <i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存
+                </button>
+                <button onclick="deletePrompt()" class="px-4 py-2 bg-red-50 text-red-500 rounded-lg text-sm cursor-pointer">
+                  <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>删除
+                </button>
+              </div>
+            </div>
+
+            <!-- 右侧：使用面板 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="play" class="w-5 h-5 text-primary"></i>
+                使用模板
+              </h3>
+
+              <!-- 变量输入 -->
+              <div id="prompt-variables" class="space-y-3 mb-4">
+                <div>
+                  <label class="block text-sm text-text mb-1">{{language}}</label>
+                  <input type="text" placeholder="如：JavaScript、Python" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm focus:border-primary focus:outline-none">
+                </div>
+                <div>
+                  <label class="block text-sm text-text mb-1">{{code}}</label>
+                  <textarea placeholder="粘贴代码..." rows="6" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm font-mono resize-none focus:border-primary focus:outline-none"></textarea>
+                </div>
+              </div>
+
+              <button onclick="usePrompt()" class="w-full px-4 py-3 bg-cta text-white rounded-lg font-medium transition-smooth hover:bg-cta/80 cursor-pointer flex items-center justify-center gap-2">
+                <i data-lucide="sparkles" class="w-5 h-5"></i>
+                生成提示词
+              </button>
+
+              <!-- 生成结果 -->
+              <div class="mt-4 flex-1">
+                <div class="flex items-center justify-between mb-2">
+                  <label class="text-sm text-text">生成结果</label>
+                  <button onclick="copyPromptResult()" class="text-xs text-primary cursor-pointer">
+                    <i data-lucide="copy" class="w-3 h-3 inline mr-1"></i>复制
+                  </button>
+                </div>
+                <div id="prompt-result" class="bg-gray-50 rounded-lg p-3 border border-border text-sm text-text font-mono h-40 overflow-auto whitespace-pre">
+                  填写变量后点击生成
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
+      <!-- Aviator表达式功能页面 -->
       <div id="page-aviator" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">Aviator表达式</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="calculator" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <!-- 页面头部 -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer">
+              <i data-lucide="arrow-left" class="w-5 h-5 text-text"></i>
+            </button>
+            <h2 class="text-lg font-semibold text-text">Aviator表达式</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="clearAviatorExpr()" class="px-3 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer">
+              <i data-lucide="eraser" class="w-4 h-4 inline mr-1"></i>清空
+            </button>
+          </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-3 gap-4 h-full">
+
+            <!-- 左侧：表达式构建器 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="puzzle" class="w-5 h-5 text-primary"></i>
+                表达式构建器
+              </h3>
+
+              <!-- 运算符按钮组 -->
+              <div class="mb-4">
+                <p class="text-xs text-muted mb-2">运算符</p>
+                <div class="grid grid-cols-4 gap-2">
+                  <button onclick="addAviatorToken('+')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer">+</button>
+                  <button onclick="addAviatorToken('-')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer">-</button>
+                  <button onclick="addAviatorToken('*')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer">×</button>
+                  <button onclick="addAviatorToken('/')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer">÷</button>
+                  <button onclick="addAviatorToken('==')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer">==</button>
+                  <button onclick="addAviatorToken('!=')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer">!=</button>
+                  <button onclick="addAviatorToken('>')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer">></button>
+                  <button onclick="addAviatorToken('<')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer"><</button>
+                  <button onclick="addAviatorToken('&&')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer">&&</button>
+                  <button onclick="addAviatorToken('||')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer">||</button>
+                  <button onclick="addAviatorToken('(')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer">(</button>
+                  <button onclick="addAviatorToken(')')" class="aviator-btn p-3 bg-gray-50 border border-border rounded-lg text-text font-medium transition-smooth hover:border-primary hover:bg-active cursor-pointer">)</button>
+                </div>
+              </div>
+
+              <!-- 函数按钮组 -->
+              <div class="mb-4">
+                <p class="text-xs text-muted mb-2">常用函数</p>
+                <div class="grid grid-cols-3 gap-2">
+                  <button onclick="addAviatorToken('string.length(', true)" class="aviator-btn px-3 py-2 bg-gray-50 border border-border rounded-lg text-xs text-text transition-smooth hover:border-primary hover:bg-active cursor-pointer">string.length</button>
+                  <button onclick="addAviatorToken('string.substring(', true)" class="aviator-btn px-3 py-2 bg-gray-50 border border-border rounded-lg text-xs text-text transition-smooth hover:border-primary hover:bg-active cursor-pointer">string.substring</button>
+                  <button onclick="addAviatorToken('string.contains(', true)" class="aviator-btn px-3 py-2 bg-gray-50 border border-border rounded-lg text-xs text-text transition-smooth hover:border-primary hover:bg-active cursor-pointer">string.contains</button>
+                  <button onclick="addAviatorToken('math.abs(', true)" class="aviator-btn px-3 py-2 bg-gray-50 border border-border rounded-lg text-xs text-text transition-smooth hover:border-primary hover:bg-active cursor-pointer">math.abs</button>
+                  <button onclick="addAviatorToken('math.round(', true)" class="aviator-btn px-3 py-2 bg-gray-50 border border-border rounded-lg text-xs text-text transition-smooth hover:border-primary hover:bg-active cursor-pointer">math.round</button>
+                  <button onclick="addAviatorToken('date.now(', true)" class="aviator-btn px-3 py-2 bg-gray-50 border border-border rounded-lg text-xs text-text transition-smooth hover:border-primary hover:bg-active cursor-pointer">date.now</button>
+                </div>
+              </div>
+
+              <!-- 变量输入 -->
+              <div class="mb-4">
+                <p class="text-xs text-muted mb-2">变量/常量</p>
+                <div class="flex gap-2">
+                  <input type="text" id="aviator-var-input" placeholder="输入变量名或数值" class="flex-1 px-3 py-2 bg-gray-50 border border-border rounded-lg text-text text-sm focus:border-primary focus:outline-none">
+                  <button onclick="addAviatorVar()" class="px-4 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 快捷示例 -->
+              <div>
+                <p class="text-xs text-muted mb-2">常用示例</p>
+                <div class="space-y-2">
+                  <button onclick="loadAviatorExample('age > 18 && score >= 60')" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-xs text-text text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                    <span class="text-primary font-medium">年龄分数判断：</span> age > 18 && score >= 60
+                  </button>
+                  <button onclick="loadAviatorExample('string.length(name) > 5')" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-xs text-text text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                    <span class="text-primary font-medium">字符串长度：</span> string.length(name) > 5
+                  </button>
+                  <button onclick="loadAviatorExample('(price * quantity) > 1000')" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-xs text-text text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                    <span class="text-primary font-medium">金额计算：</span> (price * quantity) > 1000
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 中间：表达式预览 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="eye" class="w-5 h-5 text-primary"></i>
+                表达式预览
+              </h3>
+
+              <!-- 表达式展示区 -->
+              <div class="flex-1 flex items-center justify-center">
+                <div id="aviator-preview" class="w-full bg-gray-50 rounded-lg p-4 min-h-[120px] border border-border">
+                  <div id="aviator-tokens" class="flex flex-wrap gap-1 items-center min-h-[40px]">
+                    <span class="text-sm text-muted">点击左侧按钮构建表达式</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 生成的表达式文本 -->
+              <div class="mt-4">
+                <p class="text-xs text-muted mb-2">生成结果</p>
+                <div class="bg-gray-50 rounded-lg p-3 border border-border">
+                  <code id="aviator-result" class="text-sm text-text font-mono">（表达式将在构建后显示）</code>
+                </div>
+              </div>
+
+              <!-- 操作按钮 -->
+              <div class="mt-4 flex gap-2">
+                <button onclick="copyAviatorExpr()" class="px-3 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer flex items-center gap-2">
+                  <i data-lucide="copy" class="w-4 h-4"></i>复制
+                </button>
+                <button onclick="testAviatorExpr()" class="px-3 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer flex items-center gap-2">
+                  <i data-lucide="play" class="w-4 h-4"></i>测试
+                </button>
+              </div>
+            </div>
+
+            <!-- 右侧：帮助文档 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col overflow-auto">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="book-open" class="w-5 h-5 text-primary"></i>
+                语法参考
+              </h3>
+
+              <div class="space-y-3 text-sm">
+                <div class="bg-gray-50 rounded-lg p-3">
+                  <p class="font-medium text-text mb-1">基本运算</p>
+                  <code class="text-xs text-muted">+ - * / % （加减乘除取余）</code>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                  <p class="font-medium text-text mb-1">比较运算</p>
+                  <code class="text-xs text-muted">== != > < >= <=</code>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                  <p class="font-medium text-text mb-1">逻辑运算</p>
+                  <code class="text-xs text-muted">&& || ! （与 或 非）</code>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                  <p class="font-medium text-text mb-1">三元运算</p>
+                  <code class="text-xs text-muted">condition ? true_val : false_val</code>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                  <p class="font-medium text-text mb-1">字符串函数</p>
+                  <code class="text-xs text-muted">string.length(s), substring, contains</code>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                  <p class="font-medium text-text mb-1">数学函数</p>
+                  <code class="text-xs text-muted">math.abs(d), round, pow, sqrt</code>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                  <p class="font-medium text-text mb-1">日期函数</p>
+                  <code class="text-xs text-muted">date.now(), date.parse(s)</code>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
+      <!-- Cron表达式功能页面 -->
       <div id="page-cron" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">Cron表达式</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="clock" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <!-- 页面头部 -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer">
+              <i data-lucide="arrow-left" class="w-5 h-5 text-text"></i>
+            </button>
+            <h2 class="text-lg font-semibold text-text">Cron表达式</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="resetCron()" class="px-3 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer">
+              <i data-lucide="rotate-ccw" class="w-4 h-4 inline mr-1"></i>重置
+            </button>
+          </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-3 gap-4">
+
+            <!-- 左侧：时间选择器 -->
+            <div class="bg-card rounded-xl border border-border p-4">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="clock" class="w-5 h-5 text-primary"></i>
+                时间配置
+              </h3>
+
+              <!-- 秒 -->
+              <div class="mb-4">
+                <p class="text-xs text-muted mb-2">秒 (0-59)</p>
+                <div class="flex gap-2 items-center">
+                  <select id="cron-sec-type" onchange="updateCronField('sec')" class="px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm cursor-pointer focus:border-primary focus:outline-none">
+                    <option value="*">每秒 (*)</option>
+                    <option value="specific">指定</option>
+                    <option value="range">范围</option>
+                    <option value="step">间隔</option>
+                  </select>
+                  <input type="text" id="cron-sec-value" class="hidden px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm w-24 focus:border-primary focus:outline-none" placeholder="如: 0,15,30">
+                </div>
+              </div>
+
+              <!-- 分 -->
+              <div class="mb-4">
+                <p class="text-xs text-muted mb-2">分 (0-59)</p>
+                <div class="flex gap-2 items-center">
+                  <select id="cron-min-type" onchange="updateCronField('min')" class="px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm cursor-pointer focus:border-primary focus:outline-none">
+                    <option value="*">每分 (*)</option>
+                    <option value="specific">指定</option>
+                    <option value="range">范围</option>
+                    <option value="step">间隔</option>
+                  </select>
+                  <input type="text" id="cron-min-value" class="hidden px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm w-24 focus:border-primary focus:outline-none" placeholder="如: 0,30">
+                </div>
+              </div>
+
+              <!-- 时 -->
+              <div class="mb-4">
+                <p class="text-xs text-muted mb-2">时 (0-23)</p>
+                <div class="flex gap-2 items-center">
+                  <select id="cron-hour-type" onchange="updateCronField('hour')" class="px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm cursor-pointer focus:border-primary focus:outline-none">
+                    <option value="*">每小时 (*)</option>
+                    <option value="specific">指定</option>
+                    <option value="range">范围</option>
+                    <option value="step">间隔</option>
+                  </select>
+                  <input type="text" id="cron-hour-value" class="hidden px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm w-24 focus:border-primary focus:outline-none" placeholder="如: 9,17">
+                </div>
+              </div>
+
+              <!-- 日 -->
+              <div class="mb-4">
+                <p class="text-xs text-muted mb-2">日 (1-31)</p>
+                <div class="flex gap-2 items-center">
+                  <select id="cron-day-type" onchange="updateCronField('day')" class="px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm cursor-pointer focus:border-primary focus:outline-none">
+                    <option value="*">每天 (*)</option>
+                    <option value="specific">指定</option>
+                    <option value="range">范围</option>
+                    <option value="L">月末 (L)</option>
+                  </select>
+                  <input type="text" id="cron-day-value" class="hidden px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm w-24 focus:border-primary focus:outline-none" placeholder="如: 1,15">
+                </div>
+              </div>
+
+              <!-- 月 -->
+              <div class="mb-4">
+                <p class="text-xs text-muted mb-2">月 (1-12)</p>
+                <div class="flex gap-2 items-center">
+                  <select id="cron-month-type" onchange="updateCronField('month')" class="px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm cursor-pointer focus:border-primary focus:outline-none">
+                    <option value="*">每月 (*)</option>
+                    <option value="specific">指定</option>
+                  </select>
+                  <input type="text" id="cron-month-value" class="hidden px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm w-24 focus:border-primary focus:outline-none" placeholder="如: 1,6,12">
+                </div>
+              </div>
+
+              <!-- 周 -->
+              <div>
+                <p class="text-xs text-muted mb-2">周 (0-6 或 SUN-SAT)</p>
+                <div class="flex gap-2 items-center">
+                  <select id="cron-week-type" onchange="updateCronField('week')" class="px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm cursor-pointer focus:border-primary focus:outline-none">
+                    <option value="*">每天 (*)</option>
+                    <option value="specific">指定</option>
+                  </select>
+                  <input type="text" id="cron-week-value" class="hidden px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm w-24 focus:border-primary focus:outline-none" placeholder="如: MON,FRI">
+                </div>
+              </div>
+            </div>
+
+            <!-- 中间：表达式预览 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="eye" class="w-5 h-5 text-primary"></i>
+                表达式预览
+              </h3>
+
+              <!-- 生成的表达式 -->
+              <div class="bg-gray-50 rounded-lg p-4 border border-border mb-4">
+                <p class="text-xs text-muted mb-2">Cron表达式</p>
+                <div class="bg-white rounded-lg p-3 border border-primary/30">
+                  <code id="cron-result" class="text-lg text-text font-mono text-center">* * * * * ?</code>
+                </div>
+              </div>
+
+              <!-- 字段说明 -->
+              <div class="grid grid-cols-6 gap-2 mb-4">
+                <div class="text-center">
+                  <div class="bg-blue-50 rounded-lg p-2 border border-blue-200">
+                    <p class="text-xs text-blue-600 font-medium">秒</p>
+                    <p id="cron-sec-display" class="text-xs text-blue-800 mt-1">*</p>
+                  </div>
+                </div>
+                <div class="text-center">
+                  <div class="bg-green-50 rounded-lg p-2 border border-green-200">
+                    <p class="text-xs text-green-600 font-medium">分</p>
+                    <p id="cron-min-display" class="text-xs text-green-800 mt-1">*</p>
+                  </div>
+                </div>
+                <div class="text-center">
+                  <div class="bg-amber-50 rounded-lg p-2 border border-amber-200">
+                    <p class="text-xs text-amber-600 font-medium">时</p>
+                    <p id="cron-hour-display" class="text-xs text-amber-800 mt-1">*</p>
+                  </div>
+                </div>
+                <div class="text-center">
+                  <div class="bg-purple-50 rounded-lg p-2 border border-purple-200">
+                    <p class="text-xs text-purple-600 font-medium">日</p>
+                    <p id="cron-day-display" class="text-xs text-purple-800 mt-1">*</p>
+                  </div>
+                </div>
+                <div class="text-center">
+                  <div class="bg-pink-50 rounded-lg p-2 border border-pink-200">
+                    <p class="text-xs text-pink-600 font-medium">月</p>
+                    <p id="cron-month-display" class="text-xs text-pink-800 mt-1">*</p>
+                  </div>
+                </div>
+                <div class="text-center">
+                  <div class="bg-cyan-50 rounded-lg p-2 border border-cyan-200">
+                    <p class="text-xs text-cyan-600 font-medium">周</p>
+                    <p id="cron-week-display" class="text-xs text-cyan-800 mt-1">*</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 执行时间预览 -->
+              <div class="bg-gray-50 rounded-lg p-3 border border-border">
+                <p class="text-xs text-muted mb-2">下次执行时间（最近5次）</p>
+                <div id="cron-preview-times" class="space-y-1 text-sm text-text">
+                  <p class="flex items-center gap-2">
+                    <i data-lucide="clock" class="w-4 h-4 text-primary"></i>
+                    2026-04-01 10:00:00
+                  </p>
+                  <p class="flex items-center gap-2">
+                    <i data-lucide="clock" class="w-4 h-4 text-primary"></i>
+                    2026-04-01 11:00:00
+                  </p>
+                  <p class="flex items-center gap-2">
+                    <i data-lucide="clock" class="w-4 h-4 text-primary"></i>
+                    2026-04-01 12:00:00
+                  </p>
+                </div>
+              </div>
+
+              <!-- 操作按钮 -->
+              <div class="mt-4 flex gap-2">
+                <button onclick="copyCronExpr()" class="px-3 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer flex items-center gap-2">
+                  <i data-lucide="copy" class="w-4 h-4"></i>复制
+                </button>
+                <button onclick="reverseCronExpr()" class="px-3 py-2 bg-secondary text-white rounded-lg font-medium transition-smooth hover:bg-secondary/80 cursor-pointer flex items-center gap-2">
+                  <i data-lucide="search" class="w-4 h-4"></i>反向解析
+                </button>
+              </div>
+            </div>
+
+            <!-- 右侧：常用预设 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col overflow-auto">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="zap" class="w-5 h-5 text-primary"></i>
+                常用预设
+              </h3>
+
+              <div class="space-y-2">
+                <button onclick="loadCronPreset('0 0 * * * ?')" class="w-full px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-text text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <p class="font-medium">每小时执行</p>
+                  <code class="text-xs text-muted">0 0 * * * ?</code>
+                </button>
+                <button onclick="loadCronPreset('0 0 9 * * ?')" class="w-full px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-text text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <p class="font-medium">每天早上9点</p>
+                  <code class="text-xs text-muted">0 0 9 * * ?</code>
+                </button>
+                <button onclick="loadCronPreset('0 0 9,17 * * ?')" class="w-full px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-text text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <p class="font-medium">每天9点和17点</p>
+                  <code class="text-xs text-muted">0 0 9,17 * * ?</code>
+                </button>
+                <button onclick="loadCronPreset('0 0 9 * * MON-FRI')" class="w-full px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-text text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <p class="font-medium">工作日早上9点</p>
+                  <code class="text-xs text-muted">0 0 9 * * MON-FRI</code>
+                </button>
+                <button onclick="loadCronPreset('0 0 9 1 * ?')" class="w-full px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-text text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <p class="font-medium">每月1号早上9点</p>
+                  <code class="text-xs text-muted">0 0 9 1 * ?</code>
+                </button>
+                <button onclick="loadCronPreset('0 0/30 * * * ?')" class="w-full px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-text text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <p class="font-medium">每30分钟</p>
+                  <code class="text-xs text-muted">0 0/30 * * * ?</code>
+                </button>
+                <button onclick="loadCronPreset('0 0 0 L * ?')" class="w-full px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-text text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <p class="font-medium">每月最后一天零点</p>
+                  <code class="text-xs text-muted">0 0 0 L * ?</code>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 反向解析弹窗 -->
+        <div id="modal-cron-reverse" class="modal hidden fixed inset-0 bg-black/50 flex items-center justify-center z-40">
+          <div class="bg-card rounded-xl border border-border p-6 w-[400px] max-w-full mx-4">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-semibold text-text">反向解析Cron表达式</h3>
+              <button onclick="closeModal('modal-cron-reverse')" class="p-1 rounded hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="x" class="w-5 h-5 text-text"></i></button>
+            </div>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm text-text mb-2">输入Cron表达式</label>
+                <input type="text" id="cron-input-reverse" placeholder="如: 0 0 9 * * ?" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+              </div>
+              <div id="cron-reverse-result" class="bg-gray-50 rounded-lg p-3 border border-border">
+                <p class="text-sm text-muted">输入表达式后点击解析</p>
+              </div>
+              <div class="flex gap-3">
+                <button onclick="closeModal('modal-cron-reverse')" class="px-4 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer">取消</button>
+                <button onclick="parseCronExpr()" class="px-4 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer">解析</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+      <!-- 正则表达式功能页面 -->
       <div id="page-regex" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">正则表达式</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="regex" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <!-- 页面头部 -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer">
+              <i data-lucide="arrow-left" class="w-5 h-5 text-text"></i>
+            </button>
+            <h2 class="text-lg font-semibold text-text">正则表达式</h2>
+          </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-2 gap-4">
+
+            <!-- 左侧：预设正则 -->
+            <div class="bg-card rounded-xl border border-border p-4">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="layout-grid" class="w-5 h-5 text-primary"></i>
+                17种常用预设
+              </h3>
+
+              <div class="grid grid-cols-2 gap-3">
+                <button onclick="loadRegexPreset('email')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="mail" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">邮箱</span>
+                </button>
+                <button onclick="loadRegexPreset('phone')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="phone" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">手机号</span>
+                </button>
+                <button onclick="loadRegexPreset('idcard')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="credit-card" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">身份证</span>
+                </button>
+                <button onclick="loadRegexPreset('url')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="link" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">URL</span>
+                </button>
+                <button onclick="loadRegexPreset('ip')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="globe" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">IP地址</span>
+                </button>
+                <button onclick="loadRegexPreset('date')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="calendar" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">日期</span>
+                </button>
+                <button onclick="loadRegexPreset('time')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="clock" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">时间</span>
+                </button>
+                <button onclick="loadRegexPreset('number')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="hash" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">数字</span>
+                </button>
+                <button onclick="loadRegexPreset('chinese')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="language" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">中文</span>
+                </button>
+                <button onclick="loadRegexPreset('english')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="type" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">英文</span>
+                </button>
+                <button onclick="loadRegexPreset('password')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="lock" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">密码强度</span>
+                </button>
+                <button onclick="loadRegexPreset('username')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="user" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">用户名</span>
+                </button>
+                <button onclick="loadRegexPreset('qq')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="message-circle" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">QQ号</span>
+                </button>
+                <button onclick="loadRegexPreset('wechat')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="smartphone" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">微信号</span>
+                </button>
+                <button onclick="loadRegexPreset('bankcard')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="wallet" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">银行卡</span>
+                </button>
+                <button onclick="loadRegexPreset('hex')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="palette" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">十六进制</span>
+                </button>
+                <button onclick="loadRegexPreset('html')" class="regex-preset px-3 py-3 bg-gray-50 border border-border rounded-lg text-sm text-left transition-smooth hover:border-primary hover:bg-active cursor-pointer">
+                  <i data-lucide="code" class="w-4 h-4 text-primary inline mr-1"></i>
+                  <span class="font-medium">HTML标签</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 右侧：正则编辑与测试 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="edit-3" class="w-5 h-5 text-primary"></i>
+                正则编辑与测试
+              </h3>
+
+              <!-- 正则表达式输入 -->
+              <div class="mb-4">
+                <label class="block text-sm text-text mb-2">正则表达式</label>
+                <div class="flex gap-2">
+                  <input type="text" id="regex-input" placeholder="输入正则表达式" class="flex-1 px-3 py-2 bg-gray-50 border border-border rounded-lg text-text font-mono focus:border-primary focus:outline-none">
+                  <button onclick="copyRegex()" class="px-3 py-2 bg-gray-100 text-text rounded-lg transition-smooth hover:bg-gray-200 cursor-pointer">
+                    <i data-lucide="copy" class="w-4 h-4"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 测试文本输入 -->
+              <div class="mb-4">
+                <label class="block text-sm text-text mb-2">测试文本</label>
+                <textarea id="regex-test-text" placeholder="输入测试文本" rows="4" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text font-mono resize-none focus:border-primary focus:outline-none"></textarea>
+              </div>
+
+              <!-- 匹配选项 -->
+              <div class="mb-4 flex items-center gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="regex-global" checked class="w-4 h-4 accent-primary cursor-pointer">
+                  <span class="text-sm text-text">全局匹配 (g)</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="regex-case" class="w-4 h-4 accent-primary cursor-pointer">
+                  <span class="text-sm text-text">忽略大小写 (i)</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="regex-multi" class="w-4 h-4 accent-primary cursor-pointer">
+                  <span class="text-sm text-text">多行模式 (m)</span>
+                </label>
+              </div>
+
+              <!-- 测试按钮 -->
+              <button onclick="testRegex()" class="px-4 py-3 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer flex items-center justify-center gap-2 mb-4">
+                <i data-lucide="play" class="w-5 h-5"></i>
+                测试匹配
+              </button>
+
+              <!-- 匹配结果 -->
+              <div class="flex-1 bg-gray-50 rounded-lg p-3 border border-border overflow-auto">
+                <p class="text-xs text-muted mb-2">匹配结果</p>
+                <div id="regex-result" class="text-sm text-text">
+                  <p class="text-muted">点击测试按钮查看结果</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
+      <!-- JSON美化功能页面 -->
       <div id="page-json" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">JSON美化</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="braces" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <!-- 页面头部 -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer">
+              <i data-lucide="arrow-left" class="w-5 h-5 text-text"></i>
+            </button>
+            <h2 class="text-lg font-semibold text-text">JSON美化</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="compressJson()" class="px-3 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer">
+              <i data-lucide="minimize-2" class="w-4 h-4 inline mr-1"></i>压缩
+            </button>
+            <button onclick="formatJson()" class="px-3 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer">
+              <i data-lucide="maximize-2" class="w-4 h-4 inline mr-1"></i>格式化
+            </button>
+          </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-2 gap-4 h-full">
+
+            <!-- 左侧：输入区 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold text-text flex items-center gap-2">
+                  <i data-lucide="file-input" class="w-5 h-5 text-primary"></i>
+                  JSON输入
+                </h3>
+                <div class="flex items-center gap-2">
+                  <button onclick="pasteJson()" class="px-2 py-1 bg-gray-100 text-text rounded text-xs transition-smooth hover:bg-gray-200 cursor-pointer">
+                    <i data-lucide="clipboard" class="w-3 h-3 inline mr-1"></i>粘贴
+                  </button>
+                  <button onclick="loadJsonExample()" class="px-2 py-1 bg-gray-100 text-text rounded text-xs transition-smooth hover:bg-gray-200 cursor-pointer">
+                    <i data-lucide="file-text" class="w-3 h-3 inline mr-1"></i>示例
+                  </button>
+                  <button onclick="clearJsonInput()" class="px-2 py-1 bg-gray-100 text-text rounded text-xs transition-smooth hover:bg-gray-200 cursor-pointer">
+                    <i data-lucide="eraser" class="w-3 h-3 inline mr-1"></i>清空
+                  </button>
+                </div>
+              </div>
+
+              <textarea id="json-input" placeholder="请输入JSON字符串..." class="flex-1 w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text font-mono text-sm resize-none focus:border-primary focus:outline-none" rows="20"></textarea>
+
+              <!-- 错误提示 -->
+              <div id="json-error" class="hidden mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                <i data-lucide="alert-circle" class="w-4 h-4 inline mr-1"></i>
+                <span id="json-error-msg"></span>
+              </div>
+            </div>
+
+            <!-- 右侧：输出区 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold text-text flex items-center gap-2">
+                  <i data-lucide="file-output" class="w-5 h-5 text-primary"></i>
+                  格式化结果
+                </h3>
+                <div class="flex items-center gap-3">
+                  <label class="flex items-center gap-2 text-xs">
+                    <span class="text-muted">缩进:</span>
+                    <select id="json-indent" onchange="formatJson()" class="px-2 py-1 bg-gray-50 border border-border rounded text-xs cursor-pointer">
+                      <option value="2">2空格</option>
+                      <option value="4">4空格</option>
+                      <option value="tab">Tab</option>
+                    </select>
+                  </label>
+                  <button onclick="copyJsonOutput()" class="px-3 py-2 bg-secondary text-white rounded-lg text-xs font-medium transition-smooth hover:bg-secondary/80 cursor-pointer">
+                    <i data-lucide="copy" class="w-3 h-3 inline mr-1"></i>复制
+                  </button>
+                  <button onclick="downloadJson()" class="px-3 py-2 bg-gray-100 text-text rounded-lg text-xs font-medium transition-smooth hover:bg-gray-200 cursor-pointer">
+                    <i data-lucide="download" class="w-3 h-3 inline mr-1"></i>下载
+                  </button>
+                </div>
+              </div>
+
+              <div id="json-output" class="flex-1 w-full bg-gray-50 border border-border rounded-lg p-3 font-mono text-sm overflow-auto whitespace-pre text-text">
+                <span class="text-muted">等待输入...</span>
+              </div>
+
+              <!-- 统计信息 -->
+              <div class="mt-3 flex items-center gap-4 text-xs text-muted">
+                <span id="json-stats-lines">行数: 0</span>
+                <span id="json-stats-size">大小: 0 B</span>
+                <span id="json-stats-keys">键数: 0</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
+      <!-- XML美化功能页面 -->
       <div id="page-xml" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">XML美化</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="file-code" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button>
+            <h2 class="text-lg font-semibold text-text">XML美化</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="compressXml()" class="px-3 py-2 bg-gray-100 text-text rounded-lg font-medium transition-smooth hover:bg-gray-200 cursor-pointer"><i data-lucide="minimize-2" class="w-4 h-4 inline mr-1"></i>压缩</button>
+            <button onclick="formatXml()" class="px-3 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer"><i data-lucide="maximize-2" class="w-4 h-4 inline mr-1"></i>格式化</button>
+          </div>
+        </div>
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-2 gap-4 h-full">
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-3 flex items-center gap-2"><i data-lucide="file-input" class="w-5 h-5 text-primary"></i>XML输入</h3>
+              <textarea id="xml-input" placeholder="请输入XML字符串..." class="flex-1 w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text font-mono text-sm resize-none focus:border-primary focus:outline-none" rows="20"></textarea>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold text-text flex items-center gap-2"><i data-lucide="file-output" class="w-5 h-5 text-primary"></i>格式化结果</h3>
+                <button onclick="copyXmlOutput()" class="px-3 py-1 bg-secondary text-white rounded text-xs cursor-pointer"><i data-lucide="copy" class="w-3 h-3 inline mr-1"></i>复制</button>
+              </div>
+              <div id="xml-output" class="flex-1 bg-gray-50 rounded-lg p-3 border border-border font-mono text-sm overflow-auto text-text whitespace-pre"><span class="text-muted">等待输入...</span></div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <!-- 文本比较功能页面 -->
       <div id="page-diff" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">文本比较</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="git-compare" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button>
+            <h2 class="text-lg font-semibold text-text">文本比较</h2>
+          </div>
+          <button onclick="compareText()" class="px-4 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer"><i data-lucide="git-compare" class="w-4 h-4 inline mr-1"></i>开始比较</button>
+        </div>
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-3 flex items-center gap-2"><i data-lucide="file-text" class="w-5 h-5 text-primary"></i>原始文本</h3>
+              <textarea id="diff-original" placeholder="输入原始文本..." class="flex-1 w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text font-mono text-sm resize-none focus:border-primary focus:outline-none" rows="10"></textarea>
+            </div>
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-3 flex items-center gap-2"><i data-lucide="file-text" class="w-5 h-5 text-primary"></i>修改后文本</h3>
+              <textarea id="diff-modified" placeholder="输入修改后的文本..." class="flex-1 w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text font-mono text-sm resize-none focus:border-primary focus:outline-none" rows="10"></textarea>
+            </div>
+          </div>
+          <div class="bg-card rounded-xl border border-border p-4">
+            <h3 class="font-semibold text-text mb-3 flex items-center gap-2"><i data-lucide="diff" class="w-5 h-5 text-primary"></i>差异结果</h3>
+            <div id="diff-result" class="bg-gray-50 rounded-lg p-3 border border-border font-mono text-sm min-h-[150px] text-text"><span class="text-muted">点击"开始比较"查看差异</span></div>
+          </div>
+        </div>
       </div>
+      <!-- UUID生成功能页面 -->
       <div id="page-uuid" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">UUID生成</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="fingerprint" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <!-- 页面头部 -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer">
+              <i data-lucide="arrow-left" class="w-5 h-5 text-text"></i>
+            </button>
+            <h2 class="text-lg font-semibold text-text">UUID生成</h2>
+          </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="max-w-2xl mx-auto">
+
+            <!-- 配置区 -->
+            <div class="bg-card rounded-xl border border-border p-5 mb-4">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="settings" class="w-5 h-5 text-primary"></i>
+                生成配置
+              </h3>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm text-text mb-2">UUID版本</label>
+                  <select id="uuid-version" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text cursor-pointer focus:border-primary focus:outline-none">
+                    <option value="v4">UUID v4 (随机)</option>
+                    <option value="v1">UUID v1 (时间戳)</option>
+                    <option value="nil">Nil UUID (全0)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm text-text mb-2">生成数量</label>
+                  <input type="number" id="uuid-count" value="10" min="1" max="100" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+                </div>
+                <div>
+                  <label class="block text-sm text-text mb-2">格式</label>
+                  <select id="uuid-format" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text cursor-pointer focus:border-primary focus:outline-none">
+                    <option value="standard">标准格式 (带连字符)</option>
+                    <option value="nohyphen">无连字符</option>
+                    <option value="uppercase">大写</option>
+                    <option value="braces">花括号 {uuid}</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm text-text mb-2">前缀（可选）</label>
+                  <input type="text" id="uuid-prefix" placeholder="如: user_" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+                </div>
+              </div>
+
+              <button onclick="generateUuids()" class="mt-4 w-full px-4 py-3 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer flex items-center justify-center gap-2">
+                <i data-lucide="fingerprint" class="w-5 h-5"></i>
+                批量生成UUID
+              </button>
+            </div>
+
+            <!-- 结果区 -->
+            <div class="bg-card rounded-xl border border-border p-5">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-text flex items-center gap-2">
+                  <i data-lucide="list" class="w-5 h-5 text-primary"></i>
+                  生成结果
+                </h3>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs text-muted" id="uuid-result-count">0个UUID</span>
+                  <button onclick="copyAllUuids()" class="px-3 py-1 bg-secondary text-white rounded-lg text-xs font-medium transition-smooth hover:bg-secondary/80 cursor-pointer">
+                    <i data-lucide="copy" class="w-3 h-3 inline mr-1"></i>复制全部
+                  </button>
+                  <button onclick="clearUuids()" class="px-3 py-1 bg-gray-100 text-text rounded-lg text-xs font-medium transition-smooth hover:bg-gray-200 cursor-pointer">
+                    <i data-lucide="eraser" class="w-3 h-3 inline mr-1"></i>清空
+                  </button>
+                </div>
+              </div>
+
+              <div id="uuid-list" class="space-y-2 max-h-96 overflow-auto">
+                <div class="text-center py-8 text-muted">
+                  <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
+                  <p class="text-sm">点击生成按钮批量创建UUID</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
+      <!-- 加密工具功能页面 -->
       <div id="page-crypto" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">加密工具</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="lock" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <!-- 页面头部 -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer">
+              <i data-lucide="arrow-left" class="w-5 h-5 text-text"></i>
+            </button>
+            <h2 class="text-lg font-semibold text-text">加密工具</h2>
+          </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-2 gap-4">
+
+            <!-- 左侧：输入区 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="file-input" class="w-5 h-5 text-primary"></i>
+                输入内容
+              </h3>
+
+              <!-- 加密类型选择 -->
+              <div class="mb-4">
+                <label class="block text-sm text-text mb-2">加密算法</label>
+                <div class="grid grid-cols-4 gap-2">
+                  <button onclick="selectCrypto('md5')" class="crypto-type-btn px-3 py-2 bg-primary/10 border border-primary text-primary rounded-lg text-sm font-medium transition-smooth cursor-pointer">MD5</button>
+                  <button onclick="selectCrypto('sha1')" class="crypto-type-btn px-3 py-2 bg-gray-50 border border-border text-text rounded-lg text-sm transition-smooth hover:border-primary cursor-pointer">SHA1</button>
+                  <button onclick="selectCrypto('sha256')" class="crypto-type-btn px-3 py-2 bg-gray-50 border border-border text-text rounded-lg text-sm transition-smooth hover:border-primary cursor-pointer">SHA256</button>
+                  <button onclick="selectCrypto('sha512')" class="crypto-type-btn px-3 py-2 bg-gray-50 border border-border text-text rounded-lg text-sm transition-smooth hover:border-primary cursor-pointer">SHA512</button>
+                  <button onclick="selectCrypto('base64')" class="crypto-type-btn px-3 py-2 bg-gray-50 border border-border text-text rounded-lg text-sm transition-smooth hover:border-primary cursor-pointer">Base64</button>
+                  <button onclick="selectCrypto('base64decode')" class="crypto-type-btn px-3 py-2 bg-gray-50 border border-border text-text rounded-lg text-sm transition-smooth hover:border-primary cursor-pointer">Base64解码</button>
+                  <button onclick="selectCrypto('urlencode')" class="crypto-type-btn px-3 py-2 bg-gray-50 border border-border text-text rounded-lg text-sm transition-smooth hover:border-primary cursor-pointer">URL编码</button>
+                  <button onclick="selectCrypto('urldecode')" class="crypto-type-btn px-3 py-2 bg-gray-50 border border-border text-text rounded-lg text-sm transition-smooth hover:border-primary cursor-pointer">URL解码</button>
+                </div>
+              </div>
+
+              <!-- 输入文本 -->
+              <div class="flex-1 flex flex-col">
+                <label class="block text-sm text-text mb-2">待加密/编码文本</label>
+                <textarea id="crypto-input" placeholder="请输入要加密或编码的文本..." class="flex-1 w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text font-mono text-sm resize-none focus:border-primary focus:outline-none" rows="10"></textarea>
+              </div>
+
+              <div class="mt-3 flex gap-2">
+                <button onclick="pasteCryptoInput()" class="px-3 py-2 bg-gray-100 text-text rounded-lg text-sm transition-smooth hover:bg-gray-200 cursor-pointer">
+                  <i data-lucide="clipboard" class="w-4 h-4 inline mr-1"></i>粘贴
+                </button>
+                <button onclick="clearCryptoInput()" class="px-3 py-2 bg-gray-100 text-text rounded-lg text-sm transition-smooth hover:bg-gray-200 cursor-pointer">
+                  <i data-lucide="eraser" class="w-4 h-4 inline mr-1"></i>清空
+                </button>
+                <button onclick="processCrypto()" class="flex-1 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium transition-smooth hover:bg-primary/80 cursor-pointer">
+                  <i data-lucide="lock" class="w-4 h-4 inline mr-1"></i>执行加密/编码
+                </button>
+              </div>
+            </div>
+
+            <!-- 右侧：结果区 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="file-output" class="w-5 h-5 text-primary"></i>
+                处理结果
+              </h3>
+
+              <!-- 结果显示 -->
+              <div class="flex-1 bg-gray-50 rounded-lg p-3 border border-border overflow-auto">
+                <div id="crypto-result" class="font-mono text-sm text-text whitespace-pre-wrap break-all">
+                  <span class="text-muted">等待处理...</span>
+                </div>
+              </div>
+
+              <!-- 操作按钮 -->
+              <div class="mt-3 flex gap-2">
+                <button onclick="copyCryptoResult()" class="px-3 py-2 bg-secondary text-white rounded-lg text-sm font-medium transition-smooth hover:bg-secondary/80 cursor-pointer">
+                  <i data-lucide="copy" class="w-4 h-4 inline mr-1"></i>复制结果
+                </button>
+                <button onclick="compareCrypto()" class="px-3 py-2 bg-gray-100 text-text rounded-lg text-sm transition-smooth hover:bg-gray-200 cursor-pointer">
+                  <i data-lucide="git-compare" class="w-4 h-4 inline mr-1"></i>对比验证
+                </button>
+              </div>
+
+              <!-- 历史记录 -->
+              <div class="mt-4">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-xs text-muted">历史记录</p>
+                  <button onclick="clearCryptoHistory()" class="text-xs text-muted hover:text-text cursor-pointer">清空</button>
+                </div>
+                <div id="crypto-history" class="space-y-2 max-h-32 overflow-auto">
+                  <p class="text-xs text-muted text-center py-2">暂无历史</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
+      <!-- 数据填充模板功能页面 -->
       <div id="page-template" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">数据填充模板</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="layout-template" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <!-- 页面头部 -->
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer">
+              <i data-lucide="arrow-left" class="w-5 h-5 text-text"></i>
+            </button>
+            <h2 class="text-lg font-semibold text-text">数据填充模板</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="saveTemplate()" class="px-3 py-2 bg-secondary text-white rounded-lg font-medium transition-smooth hover:bg-secondary/80 cursor-pointer">
+              <i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存模板
+            </button>
+          </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-2 gap-4">
+
+            <!-- 左侧：模板编辑 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="edit-3" class="w-5 h-5 text-primary"></i>
+                模板编辑
+              </h3>
+
+              <!-- 模板名称 -->
+              <div class="mb-4">
+                <label class="block text-sm text-text mb-2">模板名称</label>
+                <input type="text" id="template-name" placeholder="输入模板名称" class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text focus:border-primary focus:outline-none">
+              </div>
+
+              <!-- 模板内容 -->
+              <div class="flex-1 flex flex-col">
+                <label class="block text-sm text-text mb-2">模板内容（使用 {{变量名}} 作为占位符）</label>
+                <textarea id="template-content" placeholder="例如：
+姓名：{{name}}
+年龄：{{age}}
+邮箱：{{email}}
+日期：{{date}}" class="flex-1 w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-text font-mono text-sm resize-none focus:border-primary focus:outline-none" rows="15"></textarea>
+              </div>
+
+              <!-- 快捷插入 -->
+              <div class="mt-3">
+                <p class="text-xs text-muted mb-2">快捷插入占位符</p>
+                <div class="flex flex-wrap gap-2">
+                  <button onclick="insertPlaceholder('name')" class="px-2 py-1 bg-gray-100 text-text rounded text-xs hover:bg-gray-200 cursor-pointer">{{name}}</button>
+                  <button onclick="insertPlaceholder('age')" class="px-2 py-1 bg-gray-100 text-text rounded text-xs hover:bg-gray-200 cursor-pointer">{{age}}</button>
+                  <button onclick="insertPlaceholder('email')" class="px-2 py-1 bg-gray-100 text-text rounded text-xs hover:bg-gray-200 cursor-pointer">{{email}}</button>
+                  <button onclick="insertPlaceholder('phone')" class="px-2 py-1 bg-gray-100 text-text rounded text-xs hover:bg-gray-200 cursor-pointer">{{phone}}</button>
+                  <button onclick="insertPlaceholder('address')" class="px-2 py-1 bg-gray-100 text-text rounded text-xs hover:bg-gray-200 cursor-pointer">{{address}}</button>
+                  <button onclick="insertPlaceholder('date')" class="px-2 py-1 bg-gray-100 text-text rounded text-xs hover:bg-gray-200 cursor-pointer">{{date}}</button>
+                  <button onclick="insertPlaceholder('id')" class="px-2 py-1 bg-gray-100 text-text rounded text-xs hover:bg-gray-200 cursor-pointer">{{id}}</button>
+                  <button onclick="insertPlaceholder('company')" class="px-2 py-1 bg-gray-100 text-text rounded text-xs hover:bg-gray-200 cursor-pointer">{{company}}</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 右侧：数据填充 -->
+            <div class="bg-card rounded-xl border border-border p-4 flex flex-col">
+              <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+                <i data-lucide="database" class="w-5 h-5 text-primary"></i>
+                数据填充
+              </h3>
+
+              <!-- 自动填充选项 -->
+              <div class="mb-4 p-3 bg-gray-50 rounded-lg border border-border">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="auto-fill" checked class="w-4 h-4 accent-primary cursor-pointer">
+                  <span class="text-sm text-text">自动生成假数据填充</span>
+                </label>
+              </div>
+
+              <!-- 变量值输入区 -->
+              <div id="variable-inputs" class="flex-1 overflow-auto space-y-3">
+                <p class="text-sm text-muted text-center py-4">编辑模板后自动识别变量</p>
+              </div>
+
+              <!-- 操作按钮 -->
+              <div class="mt-4 flex gap-2">
+                <button onclick="fillTemplate()" class="flex-1 px-4 py-3 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer flex items-center justify-center gap-2">
+                  <i data-lucide="wand-2" class="w-5 h-5"></i>
+                  填充数据
+                </button>
+              </div>
+
+              <!-- 填充结果 -->
+              <div class="mt-4">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-sm text-text font-medium">填充结果</p>
+                  <button onclick="copyFilledResult()" class="px-2 py-1 bg-gray-100 text-text rounded text-xs hover:bg-gray-200 cursor-pointer">
+                    <i data-lucide="copy" class="w-3 h-3 inline mr-1"></i>复制
+                  </button>
+                </div>
+                <div id="filled-result" class="bg-gray-50 rounded-lg p-3 border border-border text-sm text-text font-mono max-h-48 overflow-auto whitespace-pre">
+                  <span class="text-muted">点击填充数据生成结果</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 已保存模板 -->
+          <div class="mt-4 bg-card rounded-xl border border-border p-4">
+            <h3 class="font-semibold text-text mb-4 flex items-center gap-2">
+              <i data-lucide="folder" class="w-5 h-5 text-primary"></i>
+              已保存模板
+            </h3>
+            <div class="grid grid-cols-3 gap-3" id="saved-templates">
+              <div onclick="loadTemplate('user')" class="p-3 bg-gray-50 rounded-lg border border-border cursor-pointer hover:border-primary transition-smooth">
+                <p class="font-medium text-text text-sm">用户信息模板</p>
+                <p class="text-xs text-muted mt-1">包含name、age、email等字段</p>
+              </div>
+              <div onclick="loadTemplate('order')" class="p-3 bg-gray-50 rounded-lg border border-border cursor-pointer hover:border-primary transition-smooth">
+                <p class="font-medium text-text text-sm">订单信息模板</p>
+                <p class="text-xs text-muted mt-1">包含orderId、product、price等</p>
+              </div>
+              <div onclick="loadTemplate('log')" class="p-3 bg-gray-50 rounded-lg border border-border cursor-pointer hover:border-primary transition-smooth">
+                <p class="font-medium text-text text-sm">日志格式模板</p>
+                <p class="text-xs text-muted mt-1">包含timestamp、level、message等</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+      <!-- 笔记功能页面 -->
       <div id="page-notes" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">笔记</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="notebook-pen" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button>
+            <h2 class="text-lg font-semibold text-text">笔记</h2>
+          </div>
+          <button onclick="createNewNote()" class="px-4 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer"><i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>新建笔记</button>
+        </div>
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-4 gap-3">
+            <div onclick="selectNote(1)" class="note-card bg-card rounded-xl border border-border p-4 cursor-pointer hover:border-primary transition-smooth">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs text-muted">2026-04-01</span>
+                <i data-lucide="pin" class="w-3 h-3 text-primary"></i>
+              </div>
+              <h4 class="font-medium text-text mb-2">项目计划</h4>
+              <p class="text-xs text-muted line-clamp-3">本周需要完成的任务列表：1. 完成原型设计 2. 编写PRD文档...</p>
+            </div>
+            <div onclick="selectNote(2)" class="note-card bg-card rounded-xl border border-border p-4 cursor-pointer hover:border-primary transition-smooth">
+              <div class="flex items-center justify-between mb-2"><span class="text-xs text-muted">2026-03-30</span></div>
+              <h4 class="font-medium text-text mb-2">会议纪要</h4>
+              <p class="text-xs text-muted line-clamp-3">产品评审会议要点：功能优先级调整...</p>
+            </div>
+            <div onclick="selectNote(3)" class="note-card bg-card rounded-xl border border-border p-4 cursor-pointer hover:border-primary transition-smooth">
+              <div class="flex items-center justify-between mb-2"><span class="text-xs text-muted">2026-03-29</span></div>
+              <h4 class="font-medium text-text mb-2">技术笔记</h4>
+              <p class="text-xs text-muted line-clamp-3">Electron + React 开发注意事项...</p>
+            </div>
+            <div class="bg-gray-50 rounded-xl border border-dashed border-border p-4 flex items-center justify-center cursor-pointer hover:border-primary transition-smooth" onclick="createNewNote()">
+              <div class="text-center text-muted">
+                <i data-lucide="plus" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                <p class="text-sm">添加笔记</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <!-- 账号密码功能页面 -->
       <div id="page-passwords" class="page-content hidden h-full flex flex-col">
-        <div class="flex items-center gap-3 p-4 border-b border-border"><button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button><h2 class="text-lg font-semibold text-text">账号密码</h2></div>
-        <div class="flex-1 flex items-center justify-center"><div class="text-center text-muted"><i data-lucide="key-round" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p>功能开发中...</p></div></div>
+        <div class="flex items-center justify-between p-4 border-b border-border">
+          <div class="flex items-center gap-3">
+            <button onclick="backToGroup()" class="p-2 rounded-lg hover:bg-gray-100 transition-smooth cursor-pointer"><i data-lucide="arrow-left" class="w-5 h-5 text-text"></i></button>
+            <h2 class="text-lg font-semibold text-text">账号密码</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="text" placeholder="搜索..." class="w-40 px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm focus:border-primary focus:outline-none">
+            <button onclick="addPassword()" class="px-4 py-2 bg-primary text-white rounded-lg font-medium transition-smooth hover:bg-primary/80 cursor-pointer"><i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>添加</button>
+          </div>
+        </div>
+        <div class="flex-1 overflow-auto p-4">
+          <div class="bg-card rounded-xl border border-border overflow-hidden">
+            <table class="w-full">
+              <thead class="bg-gray-50 border-b border-border">
+                <tr>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-text">平台/网站</th>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-text">账号</th>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-text">密码</th>
+                  <th class="text-left px-4 py-3 text-sm font-medium text-text">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                <tr class="hover:bg-gray-50 transition-smooth">
+                  <td class="px-4 py-3"><div class="flex items-center gap-2"><div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><i data-lucide="github" class="w-4 h-4 text-blue-600"></i></div><span class="text-sm text-text font-medium">GitHub</span></div></td>
+                  <td class="px-4 py-3 text-sm text-text">developer@example.com</td>
+                  <td class="px-4 py-3 text-sm text-muted">••••••••</td>
+                  <td class="px-4 py-3"><div class="flex items-center gap-2"><button class="p-1.5 hover:bg-gray-100 rounded cursor-pointer" title="复制密码"><i data-lucide="copy" class="w-4 h-4 text-muted"></i></button><button class="p-1.5 hover:bg-gray-100 rounded cursor-pointer" title="编辑"><i data-lucide="pencil" class="w-4 h-4 text-muted"></i></button><button class="p-1.5 hover:bg-red-50 rounded cursor-pointer" title="删除"><i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i></button></div></td>
+                </tr>
+                <tr class="hover:bg-gray-50 transition-smooth">
+                  <td class="px-4 py-3"><div class="flex items-center gap-2"><div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center"><i data-lucide="mail" class="w-4 h-4 text-red-600"></i></div><span class="text-sm text-text font-medium">Gmail</span></div></td>
+                  <td class="px-4 py-3 text-sm text-text">user@gmail.com</td>
+                  <td class="px-4 py-3 text-sm text-muted">••••••••</td>
+                  <td class="px-4 py-3"><div class="flex items-center gap-2"><button class="p-1.5 hover:bg-gray-100 rounded cursor-pointer"><i data-lucide="copy" class="w-4 h-4 text-muted"></i></button><button class="p-1.5 hover:bg-gray-100 rounded cursor-pointer"><i data-lucide="pencil" class="w-4 h-4 text-muted"></i></button><button class="p-1.5 hover:bg-red-50 rounded cursor-pointer"><i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i></button></div></td>
+                </tr>
+                <tr class="hover:bg-gray-50 transition-smooth">
+                  <td class="px-4 py-3"><div class="flex items-center gap-2"><div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center"><i data-lucide="database" class="w-4 h-4 text-green-600"></i></div><span class="text-sm text-text font-medium">数据库服务器</span></div></td>
+                  <td class="px-4 py-3 text-sm text-text">admin</td>
+                  <td class="px-4 py-3 text-sm text-muted">••••••••</td>
+                  <td class="px-4 py-3"><div class="flex items-center gap-2"><button class="p-1.5 hover:bg-gray-100 rounded cursor-pointer"><i data-lucide="copy" class="w-4 h-4 text-muted"></i></button><button class="p-1.5 hover:bg-gray-100 rounded cursor-pointer"><i data-lucide="pencil" class="w-4 h-4 text-muted"></i></button><button class="p-1.5 hover:bg-red-50 rounded cursor-pointer"><i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i></button></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- TodoList功能页面 -->
@@ -697,6 +2122,1252 @@
     lucide.createIcons();
     let draggedItem = null;
     let todoIdCounter = 100;
+
+    // ========== Focus模式处理 ==========
+    (function initFocusMode() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const sandbox = urlParams.get('sandbox');
+      const focus = urlParams.get('focus');
+      const hash = window.location.hash.slice(1);
+
+      // 如果是沙盒模式
+      if (sandbox === 'true') {
+        document.body.classList.add('focus-mode');
+
+        // 根据focus参数或hash跳转到对应页面
+        const targetPage = focus || hash;
+        if (targetPage) {
+          // 延迟执行，确保DOM加载完成
+          setTimeout(() => {
+            showPage(targetPage);
+            // 更新URL hash
+            if (!hash) {
+              history.replaceState(null, '', '#' + targetPage);
+            }
+          }, 100);
+        }
+      }
+    })();
+    // ========== Focus模式处理结束 ==========
+
+    // ========== 文件解读功能 ==========
+    let uploadedFiles = [];
+
+    function triggerFileUpload() {
+      document.getElementById('file-input').click();
+    }
+
+    function handleFileDragOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const zone = document.getElementById('file-drop-zone');
+      zone.classList.add('border-primary', 'bg-active');
+    }
+
+    function handleFileDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const zone = document.getElementById('file-drop-zone');
+      zone.classList.remove('border-primary', 'bg-active');
+      const files = e.dataTransfer.files;
+      addFiles(files);
+    }
+
+    function handleFileSelect(e) {
+      const files = e.target.files;
+      addFiles(files);
+    }
+
+    function addFiles(files) {
+      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      for (let file of files) {
+        if (allowedTypes.includes(file.type) || file.name.endsWith('.doc') || file.name.endsWith('.docx') || file.name.endsWith('.pdf')) {
+          uploadedFiles.push({
+            id: Date.now() + Math.random(),
+            name: file.name,
+            size: formatFileSize(file.size),
+            type: getFileTypeIcon(file.name)
+          });
+        }
+      }
+      renderFileList();
+      lucide.createIcons();
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function getFileTypeIcon(filename) {
+      if (filename.endsWith('.pdf')) return 'file-text';
+      return 'file-type';
+    }
+
+    function renderFileList() {
+      const list = document.getElementById('file-list');
+      const emptyState = document.getElementById('file-empty-state');
+      const countEl = document.getElementById('file-count');
+
+      if (uploadedFiles.length === 0) {
+        list.innerHTML = '';
+        list.appendChild(emptyState);
+        emptyState.classList.remove('hidden');
+        countEl.textContent = '0个文件';
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      countEl.textContent = uploadedFiles.length + '个文件';
+
+      list.innerHTML = uploadedFiles.map(file => `
+        <div class="file-item p-3 bg-gray-50 rounded-lg border border-border flex items-center gap-3 transition-smooth hover:border-primary" data-id="${file.id}">
+          <i data-lucide="${file.type}" class="w-5 h-5 text-primary"></i>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm text-text font-medium truncate">${file.name}</p>
+            <p class="text-xs text-muted">${file.size}</p>
+          </div>
+          <button onclick="removeFile('${file.id}')" class="p-2 rounded hover:bg-red-100 text-red-500 transition-smooth cursor-pointer">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function removeFile(id) {
+      uploadedFiles = uploadedFiles.filter(f => f.id != id);
+      renderFileList();
+    }
+
+    function clearAllFiles() {
+      uploadedFiles = [];
+      renderFileList();
+      document.getElementById('result-empty-state').classList.remove('hidden');
+      document.getElementById('result-loading').classList.add('hidden');
+      document.getElementById('result-content').classList.add('hidden');
+      document.getElementById('result-actions').classList.add('hidden');
+    }
+
+    function analyzeFiles() {
+      if (uploadedFiles.length === 0) {
+        alert('请先上传文件');
+        return;
+      }
+
+      document.getElementById('result-empty-state').classList.add('hidden');
+      document.getElementById('result-loading').classList.remove('hidden');
+      document.getElementById('result-content').classList.add('hidden');
+
+      // 模拟AI解读
+      setTimeout(() => {
+        showAnalysisResult();
+      }, 2000);
+    }
+
+    function showAnalysisResult() {
+      document.getElementById('result-loading').classList.add('hidden');
+      document.getElementById('result-content').classList.remove('hidden');
+      document.getElementById('result-actions').classList.remove('hidden');
+
+      const resultContent = document.getElementById('result-content');
+      resultContent.innerHTML = `
+        <div class="bg-gray-50 rounded-lg p-4">
+          <h4 class="font-semibold text-text mb-3 flex items-center gap-2">
+            <i data-lucide="list" class="w-4 h-4 text-primary"></i>
+            文件概述
+          </h4>
+          <p class="text-sm text-text/80 leading-relaxed">本文档是一份<strong class="text-text">产品需求文档（PRD）</strong>，主要描述了"Boost Tools"效能助推器产品的功能需求和技术架构。文档共<strong class="text-text">15个功能模块</strong>，分为5大分组。</p>
+        </div>
+
+        <div class="bg-gray-50 rounded-lg p-4">
+          <h4 class="font-semibold text-text mb-3 flex items-center gap-2">
+            <i data-lucide="key-round" class="w-4 h-4 text-primary"></i>
+            重点内容提取
+          </h4>
+          <ul class="space-y-3 text-sm text-text/80">
+            <li class="flex items-start gap-2">
+              <span class="w-2 h-2 bg-primary rounded-full mt-1.5"></span>
+              <div>
+                <p class="font-medium text-text">技术栈选型</p>
+                <p class="text-muted">使用Electron + React + TypeScript构建桌面应用，采用Ant Design组件库。</p>
+                <p class="text-xs text-primary mt-1 flex items-center gap-1">
+                  <i data-lucide="map-pin" class="w-3 h-3"></i>
+                  来源: 第3章 "技术架构" 第12行
+                </p>
+              </div>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="w-2 h-2 bg-primary rounded-full mt-1.5"></span>
+              <div>
+                <p class="font-medium text-text">核心功能模块</p>
+                <p class="text-muted">包含TodoList周报、文件解读、假数据生成、表达式生成等15个功能。</p>
+                <p class="text-xs text-primary mt-1 flex items-center gap-1">
+                  <i data-lucide="map-pin" class="w-3 h-3"></i>
+                  来源: 第5章 "功能清单" 第28-45行
+                </p>
+              </div>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="w-2 h-2 bg-primary rounded-full mt-1.5"></span>
+              <div>
+                <p class="font-medium text-text">大模型配置</p>
+                <p class="text-muted">支持Anthropic Messages API格式，模型名称由用户手动输入。</p>
+                <p class="text-xs text-primary mt-1 flex items-center gap-1">
+                  <i data-lucide="map-pin" class="w-3 h-3"></i>
+                  来源: 第6章 "系统设置" 第58行
+                </p>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="bg-gray-50 rounded-lg p-4">
+          <h4 class="font-semibold text-text mb-3 flex items-center gap-2">
+            <i data-lucide="lightbulb" class="w-4 h-4 text-primary"></i>
+            AI建议
+          </h4>
+          <p class="text-sm text-text/80 leading-relaxed">建议优先开发<strong class="text-text">P0级别的8个功能模块</strong>，包括文件解读、表达式生成、JSON美化、UUID生成等核心工具，确保产品 MVP 版本具备完整的基础能力。</p>
+        </div>
+      `;
+      lucide.createIcons();
+    }
+
+    function copyResult() {
+      const content = document.getElementById('result-content').innerText;
+      navigator.clipboard.writeText(content).then(() => {
+        alert('结果已复制到剪贴板');
+      });
+    }
+
+    function exportResult() {
+      alert('导出功能：可将解读结果导出为 Markdown 或 PDF 格式');
+    }
+    // ========== 文件解读功能结束 ==========
+
+    // ========== Aviator表达式功能 ==========
+    let aviatorTokens = [];
+
+    function addAviatorToken(token, isFunction = false) {
+      aviatorTokens.push({ type: isFunction ? 'function' : 'operator', value: token });
+      renderAviatorTokens();
+      lucide.createIcons();
+    }
+
+    function addAviatorVar() {
+      const input = document.getElementById('aviator-var-input');
+      const value = input.value.trim();
+      if (value) {
+        // 判断是数字还是字符串变量
+        const isNumber = /^[\d.]+$/.test(value);
+        aviatorTokens.push({
+          type: isNumber ? 'number' : 'variable',
+          value: isNumber ? value : value
+        });
+        input.value = '';
+        renderAviatorTokens();
+        lucide.createIcons();
+      }
+    }
+
+    function renderAviatorTokens() {
+      const container = document.getElementById('aviator-tokens');
+      if (aviatorTokens.length === 0) {
+        container.innerHTML = '<span class="text-sm text-muted">点击左侧按钮构建表达式</span>';
+        document.getElementById('aviator-result').textContent = '（表达式将在构建后显示）';
+        return;
+      }
+
+      container.innerHTML = aviatorTokens.map((token, index) => {
+        let bgColor = 'bg-gray-100';
+        let textColor = 'text-text';
+        if (token.type === 'operator') {
+          bgColor = 'bg-blue-50';
+          textColor = 'text-blue-600';
+        } else if (token.type === 'function') {
+          bgColor = 'bg-purple-50';
+          textColor = 'text-purple-600';
+        } else if (token.type === 'number') {
+          bgColor = 'bg-green-50';
+          textColor = 'text-green-600';
+        } else if (token.type === 'variable') {
+          bgColor = 'bg-amber-50';
+          textColor = 'text-amber-600';
+        }
+        return `<span class="inline-flex items-center gap-1 px-2 py-1 ${bgColor} ${textColor} rounded text-sm font-medium cursor-pointer hover:opacity-70" onclick="removeAviatorToken(${index})" title="点击删除">
+          ${token.value}
+          <i data-lucide="x" class="w-3 h-3 opacity-50"></i>
+        </span>`;
+      }).join('');
+
+      // 更新生成结果
+      const expr = aviatorTokens.map(t => t.value).join(' ');
+      document.getElementById('aviator-result').textContent = expr;
+      lucide.createIcons();
+    }
+
+    function removeAviatorToken(index) {
+      aviatorTokens.splice(index, 1);
+      renderAviatorTokens();
+    }
+
+    function clearAviatorExpr() {
+      aviatorTokens = [];
+      renderAviatorTokens();
+    }
+
+    function loadAviatorExample(expr) {
+      aviatorTokens = [];
+      // 简单解析表达式
+      const parts = expr.match(/[a-zA-Z_][a-zA-Z0-9_.]*|[\d.]+|[+\-*/<>=!&|()]+/g) || [];
+      parts.forEach(part => {
+        let type = 'variable';
+        if (/^[\d.]+$/.test(part)) type = 'number';
+        else if (/[+\-*/<>=!&|()]/.test(part)) type = 'operator';
+        else if (part.includes('(')) type = 'function';
+        aviatorTokens.push({ type, value: part });
+      });
+      renderAviatorTokens();
+      lucide.createIcons();
+    }
+
+    function copyAviatorExpr() {
+      const expr = document.getElementById('aviator-result').textContent;
+      if (expr && expr !== '（表达式将在构建后显示）') {
+        navigator.clipboard.writeText(expr).then(() => {
+          alert('表达式已复制到剪贴板');
+        });
+      } else {
+        alert('请先构建表达式');
+      }
+    }
+
+    function testAviatorExpr() {
+      const expr = document.getElementById('aviator-result').textContent;
+      if (expr && expr !== '（表达式将在构建后显示）') {
+        alert('测试功能：需要配置测试变量值后执行表达式验证');
+      } else {
+        alert('请先构建表达式');
+      }
+    }
+    // ========== Aviator表达式功能结束 ==========
+
+    // ========== Cron表达式功能 ==========
+    let cronFields = { sec: '*', min: '*', hour: '*', day: '*', month: '*', week: '?' };
+
+    function updateCronField(field) {
+      const typeSelect = document.getElementById(`cron-${field}-type`);
+      const valueInput = document.getElementById(`cron-${field}-value`);
+      const type = typeSelect.value;
+
+      if (type === 'specific' || type === 'range' || type === 'step') {
+        valueInput.classList.remove('hidden');
+        valueInput.placeholder = type === 'specific' ? '如: 0,15,30' : type === 'range' ? '如: 1-5' : '如: 0/5';
+      } else {
+        valueInput.classList.add('hidden');
+      }
+
+      // 更新字段值
+      if (type === '*') cronFields[field] = '*';
+      else if (type === 'L') cronFields[field] = 'L';
+      else if (valueInput.value) cronFields[field] = valueInput.value;
+      else cronFields[field] = type === 'specific' ? '0' : '*';
+
+      updateCronDisplay();
+    }
+
+    function updateCronDisplay() {
+      // 更新字段显示
+      ['sec', 'min', 'hour', 'day', 'month', 'week'].forEach(field => {
+        const displayEl = document.getElementById(`cron-${field}-display`);
+        if (displayEl) displayEl.textContent = cronFields[field];
+      });
+
+      // 更新表达式
+      const expr = `${cronFields.sec} ${cronFields.min} ${cronFields.hour} ${cronFields.day} ${cronFields.month} ${cronFields.week}`;
+      document.getElementById('cron-result').textContent = expr;
+
+      // 模拟下次执行时间
+      updateCronPreviewTimes();
+    }
+
+    function updateCronPreviewTimes() {
+      const now = new Date();
+      const times = [];
+      for (let i = 0; i < 5; i++) {
+        const time = new Date(now.getTime() + (i + 1) * 3600000);
+        times.push(time.toLocaleString('zh-CN'));
+      }
+      const container = document.getElementById('cron-preview-times');
+      container.innerHTML = times.map(t => `<p class="flex items-center gap-2"><i data-lucide="clock" class="w-4 h-4 text-primary"></i>${t}</p>`).join('');
+      lucide.createIcons();
+    }
+
+    function resetCron() {
+      cronFields = { sec: '*', min: '*', hour: '*', day: '*', month: '*', week: '?' };
+      ['sec', 'min', 'hour', 'day', 'month', 'week'].forEach(field => {
+        document.getElementById(`cron-${field}-type`).value = '*';
+        document.getElementById(`cron-${field}-value`).classList.add('hidden');
+        document.getElementById(`cron-${field}-value`).value = '';
+      });
+      updateCronDisplay();
+    }
+
+    function loadCronPreset(expr) {
+      const parts = expr.split(' ');
+      if (parts.length >= 6) {
+        cronFields = {
+          sec: parts[0] || '*',
+          min: parts[1] || '*',
+          hour: parts[2] || '*',
+          day: parts[3] || '*',
+          month: parts[4] || '*',
+          week: parts[5] || '?'
+        };
+        updateCronDisplay();
+      }
+    }
+
+    function copyCronExpr() {
+      const expr = document.getElementById('cron-result').textContent;
+      navigator.clipboard.writeText(expr).then(() => {
+        alert('Cron表达式已复制');
+      });
+    }
+
+    function reverseCronExpr() {
+      document.getElementById('modal-cron-reverse').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function parseCronExpr() {
+      const input = document.getElementById('cron-input-reverse').value.trim();
+      if (!input) {
+        alert('请输入Cron表达式');
+        return;
+      }
+      const parts = input.split(' ');
+      const result = document.getElementById('cron-reverse-result');
+      if (parts.length >= 6) {
+        result.innerHTML = `
+          <p class="text-sm text-text font-medium mb-2">解析结果：</p>
+          <ul class="text-xs text-muted space-y-1">
+            <li>秒: <span class="text-primary">${parts[0]}</span></li>
+            <li>分: <span class="text-primary">${parts[1]}</span></li>
+            <li>时: <span class="text-primary">${parts[2]}</span></li>
+            <li>日: <span class="text-primary">${parts[3]}</span></li>
+            <li>月: <span class="text-primary">${parts[4]}</span></li>
+            <li>周: <span class="text-primary">${parts[5]}</span></li>
+          </ul>
+        `;
+      } else {
+        result.innerHTML = '<p class="text-sm text-red-500">表达式格式不正确，应为6位或7位</p>';
+      }
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+    // ========== Cron表达式功能结束 ==========
+
+    // ========== 正则表达式功能 ==========
+    const regexPresets = {
+      email: { pattern: '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', desc: '匹配邮箱地址' },
+      phone: { pattern: '^1[3-9]\\d{9}$', desc: '匹配中国大陆手机号' },
+      idcard: { pattern: '^[1-9]\\d{5}(19|20)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}[0-9Xx]$', desc: '匹配18位身份证号' },
+      url: { pattern: '^(https?:\\/\\/)?([\\da-z.-]+)\\.([a-z.]{2,6})([\\/\\w .-]*)*\\/?$', desc: '匹配URL地址' },
+      ip: { pattern: '^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$', desc: '匹配IPv4地址' },
+      date: { pattern: '^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$', desc: '匹配日期格式 YYYY-MM-DD' },
+      time: { pattern: '^(0?\\d|1[0-9]|2[0-3]):[0-5]\\d(:[0-5]\\d)?$', desc: '匹配时间格式 HH:MM:SS' },
+      number: { pattern: '^-?\\d+(\\.\\d+)?$', desc: '匹配整数或浮点数' },
+      chinese: { pattern: '[\\u4e00-\\u9fa5]+', desc: '匹配中文字符' },
+      english: { pattern: '[a-zA-Z]+', desc: '匹配英文字母' },
+      password: { pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)[a-zA-Z\\d]{8,16}$', desc: '密码强度：8-16位，含大小写字母和数字' },
+      username: { pattern: '^[a-zA-Z][a-zA-Z0-9_]{2,15}$', desc: '用户名：字母开头，3-16位' },
+      qq: { pattern: '^[1-9]\\d{4,10}$', desc: '匹配QQ号' },
+      wechat: { pattern: '^[a-zA-Z][a-zA-Z0-9_-]{5,19}$', desc: '匹配微信号' },
+      bankcard: { pattern: '^[1-9]\\d{15,18}$', desc: '匹配银行卡号' },
+      hex: { pattern: '^#?([a-fA-F0-9]{6}|[a-fA-F0-9]{3})$', desc: '匹配十六进制颜色值' },
+      html: { pattern: '<([a-zA-Z][a-zA-Z0-9]*)[^>]*>.*?</\\1>|<([a-zA-Z][a-zA-Z0-9]*)[^>]*\\/?>', desc: '匹配HTML标签' }
+    };
+
+    function loadRegexPreset(type) {
+      const preset = regexPresets[type];
+      if (preset) {
+        document.getElementById('regex-input').value = preset.pattern;
+        document.getElementById('regex-test-text').placeholder = preset.desc;
+      }
+      lucide.createIcons();
+    }
+
+    function testRegex() {
+      const pattern = document.getElementById('regex-input').value;
+      const text = document.getElementById('regex-test-text').value;
+      const global = document.getElementById('regex-global').checked;
+      const caseInsensitive = document.getElementById('regex-case').checked;
+      const multiline = document.getElementById('regex-multi').checked;
+
+      if (!pattern) {
+        alert('请输入正则表达式');
+        return;
+      }
+
+      let flags = '';
+      if (global) flags += 'g';
+      if (caseInsensitive) flags += 'i';
+      if (multiline) flags += 'm';
+
+      const resultEl = document.getElementById('regex-result');
+
+      try {
+        const regex = new RegExp(pattern, flags);
+        if (global) {
+          const matches = text.match(regex) || [];
+          if (matches.length > 0) {
+            resultEl.innerHTML = `<p class="text-green-600 font-medium mb-2">匹配到 ${matches.length} 个结果：</p><ul class="space-y-1">${matches.map(m => `<li class="bg-green-50 px-2 py-1 rounded border border-green-200">"${m}"</li>`).join('')}</ul>`;
+          } else {
+            resultEl.innerHTML = '<p class="text-muted">无匹配结果</p>';
+          }
+        } else {
+          const match = regex.exec(text);
+          if (match) {
+            resultEl.innerHTML = `<p class="text-green-600 font-medium mb-2">匹配成功：</p><p class="bg-green-50 px-2 py-1 rounded border border-green-200">"${match[0]}"</p><p class="text-xs text-muted mt-2">位置: ${match.index}</p>`;
+          } else {
+            resultEl.innerHTML = '<p class="text-muted">无匹配结果</p>';
+          }
+        }
+      } catch (e) {
+        resultEl.innerHTML = `<p class="text-red-500">正则表达式错误: ${e.message}</p>`;
+      }
+    }
+
+    function copyRegex() {
+      const pattern = document.getElementById('regex-input').value;
+      if (pattern) {
+        navigator.clipboard.writeText(pattern).then(() => {
+          alert('正则表达式已复制');
+        });
+      }
+    }
+    // ========== 正则表达式功能结束 ==========
+
+    // ========== JSON美化功能 ==========
+    function formatJson() {
+      const input = document.getElementById('json-input').value.trim();
+      const output = document.getElementById('json-output');
+      const errorDiv = document.getElementById('json-error');
+      const errorMsg = document.getElementById('json-error-msg');
+
+      if (!input) {
+        output.innerHTML = '<span class="text-muted">等待输入...</span>';
+        errorDiv.classList.add('hidden');
+        updateJsonStats(0, 0, 0);
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(input);
+        const indent = document.getElementById('json-indent').value;
+        const indentSize = indent === 'tab' ? '\t' : parseInt(indent);
+        const formatted = JSON.stringify(parsed, null, indentSize);
+
+        // 高亮显示
+        output.innerHTML = highlightJson(formatted);
+        errorDiv.classList.add('hidden');
+
+        // 更新统计
+        const lines = formatted.split('\n').length;
+        const size = new Blob([formatted]).size;
+        const keys = countJsonKeys(parsed);
+        updateJsonStats(lines, size, keys);
+      } catch (e) {
+        errorDiv.classList.remove('hidden');
+        errorMsg.textContent = e.message;
+        output.innerHTML = '<span class="text-red-500">JSON格式错误</span>';
+      }
+    }
+
+    function compressJson() {
+      const input = document.getElementById('json-input').value.trim();
+      const output = document.getElementById('json-output');
+      const errorDiv = document.getElementById('json-error');
+
+      if (!input) {
+        output.innerHTML = '<span class="text-muted">等待输入...</span>';
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(input);
+        const compressed = JSON.stringify(parsed);
+        output.textContent = compressed;
+        errorDiv.classList.add('hidden');
+
+        const size = new Blob([compressed]).size;
+        updateJsonStats(1, size, countJsonKeys(parsed));
+      } catch (e) {
+        document.getElementById('json-error-msg').textContent = e.message;
+        errorDiv.classList.remove('hidden');
+      }
+    }
+
+    function highlightJson(json) {
+      // 简单语法高亮
+      return json
+        .replace(/(".*?")\s*:/g, '<span class="text-primary font-medium">$1</span>:')
+        .replace(/:\s*(".*?")/g, ': <span class="text-green-600">$1</span>')
+        .replace(/:\s*(\d+)/g, ': <span class="text-amber-600">$1</span>')
+        .replace(/:\s*(true|false)/g, ': <span class="text-purple-600">$1</span>')
+        .replace(/:\s*(null)/g, ': <span class="text-muted">$1</span>');
+    }
+
+    function countJsonKeys(obj) {
+      let count = 0;
+      if (typeof obj === 'object' && obj !== null) {
+        if (Array.isArray(obj)) {
+          obj.forEach(item => count += countJsonKeys(item));
+        } else {
+          count += Object.keys(obj).length;
+          Object.values(obj).forEach(val => count += countJsonKeys(val));
+        }
+      }
+      return count;
+    }
+
+    function updateJsonStats(lines, size, keys) {
+      document.getElementById('json-stats-lines').textContent = `行数: ${lines}`;
+      document.getElementById('json-stats-size').textContent = `大小: ${formatFileSize(size)}`;
+      document.getElementById('json-stats-keys').textContent = `键数: ${keys}`;
+    }
+
+    function pasteJson() {
+      navigator.clipboard.readText().then(text => {
+        document.getElementById('json-input').value = text;
+        formatJson();
+      });
+    }
+
+    function loadJsonExample() {
+      const example = {
+        "name": "Boost Tools",
+        "version": "1.0.0",
+        "features": ["TodoList", "FileReader", "Regex"],
+        "config": {
+          "theme": "light",
+          "language": "zh-CN",
+          "autoSave": true
+        },
+        "users": [
+          { "id": 1, "name": "张三", "role": "admin" },
+          { "id": 2, "name": "李四", "role": "user" }
+        ]
+      };
+      document.getElementById('json-input').value = JSON.stringify(example);
+      formatJson();
+    }
+
+    function clearJsonInput() {
+      document.getElementById('json-input').value = '';
+      document.getElementById('json-output').innerHTML = '<span class="text-muted">等待输入...</span>';
+      document.getElementById('json-error').classList.add('hidden');
+      updateJsonStats(0, 0, 0);
+    }
+
+    function copyJsonOutput() {
+      const output = document.getElementById('json-output').textContent;
+      navigator.clipboard.writeText(output).then(() => {
+        alert('JSON已复制到剪贴板');
+      });
+    }
+
+    function downloadJson() {
+      const output = document.getElementById('json-output').textContent;
+      const blob = new Blob([output], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'formatted.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    // ========== JSON美化功能结束 ==========
+
+    // ========== UUID生成功能 ==========
+    function generateUuidV4() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    function generateUuidV1() {
+      // 简化版 v1，实际应使用时间戳
+      const now = Date.now();
+      const random = Math.random().toString(16).slice(2, 10);
+      return `${now.toString(16).slice(-8)}-${random.slice(0, 4)}-1xxx-yxxx-${random}xxx`.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    function generateUuids() {
+      const version = document.getElementById('uuid-version').value;
+      const count = parseInt(document.getElementById('uuid-count').value) || 10;
+      const format = document.getElementById('uuid-format').value;
+      const prefix = document.getElementById('uuid-prefix').value || '';
+
+      const uuids = [];
+      for (let i = 0; i < Math.min(count, 100); i++) {
+        let uuid;
+        if (version === 'v4') uuid = generateUuidV4();
+        else if (version === 'v1') uuid = generateUuidV1();
+        else uuid = '00000000-0000-0000-0000-000000000000';
+
+        // 格式化
+        if (format === 'nohyphen') uuid = uuid.replace(/-/g, '');
+        else if (format === 'uppercase') uuid = uuid.toUpperCase();
+        else if (format === 'braces') uuid = `{${uuid}}`;
+
+        uuids.push(prefix + uuid);
+      }
+
+      renderUuidList(uuids);
+    }
+
+    function renderUuidList(uuids) {
+      const list = document.getElementById('uuid-list');
+      document.getElementById('uuid-result-count').textContent = `${uuids.length}个UUID`;
+
+      list.innerHTML = uuids.map((uuid, i) => `
+        <div class="uuid-item flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-border group hover:border-primary transition-smooth">
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-muted w-8">${i + 1}.</span>
+            <code class="text-sm text-text font-mono">${uuid}</code>
+          </div>
+          <button onclick="copyUuid('${uuid}')" class="p-2 rounded opacity-0 group-hover:opacity-100 hover:bg-primary/10 text-primary transition-smooth cursor-pointer">
+            <i data-lucide="copy" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function copyUuid(uuid) {
+      navigator.clipboard.writeText(uuid).then(() => {
+        alert('已复制: ' + uuid);
+      });
+    }
+
+    function copyAllUuids() {
+      const items = document.querySelectorAll('.uuid-item code');
+      const uuids = Array.from(items).map(el => el.textContent);
+      if (uuids.length > 0) {
+        navigator.clipboard.writeText(uuids.join('\n')).then(() => {
+          alert('已复制全部UUID');
+        });
+      }
+    }
+
+    function clearUuids() {
+      document.getElementById('uuid-list').innerHTML = `
+        <div class="text-center py-8 text-muted">
+          <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
+          <p class="text-sm">点击生成按钮批量创建UUID</p>
+        </div>
+      `;
+      document.getElementById('uuid-result-count').textContent = '0个UUID';
+      lucide.createIcons();
+    }
+    // ========== UUID生成功能结束 ==========
+
+    // ========== 加密工具功能 ==========
+    let currentCryptoType = 'md5';
+    let cryptoHistory = [];
+
+    function selectCrypto(type) {
+      currentCryptoType = type;
+      document.querySelectorAll('.crypto-type-btn').forEach(btn => {
+        btn.classList.remove('bg-primary/10', 'border-primary', 'text-primary');
+        btn.classList.add('bg-gray-50', 'border-border', 'text-text');
+      });
+      event.target.classList.remove('bg-gray-50', 'border-border', 'text-text');
+      event.target.classList.add('bg-primary/10', 'border-primary', 'text-primary');
+    }
+
+    async function processCrypto() {
+      const input = document.getElementById('crypto-input').value;
+      const resultEl = document.getElementById('crypto-result');
+
+      if (!input) {
+        alert('请输入要处理的文本');
+        return;
+      }
+
+      let result = '';
+      try {
+        switch (currentCryptoType) {
+          case 'md5':
+            // 模拟MD5（实际需要crypto库）
+            result = await simulateHash('MD5', input);
+            break;
+          case 'sha1':
+            result = await simulateHash('SHA1', input);
+            break;
+          case 'sha256':
+            result = await simulateHash('SHA256', input);
+            break;
+          case 'sha512':
+            result = await simulateHash('SHA512', input);
+            break;
+          case 'base64':
+            result = btoa(unescape(encodeURIComponent(input)));
+            break;
+          case 'base64decode':
+            result = decodeURIComponent(escape(atob(input)));
+            break;
+          case 'urlencode':
+            result = encodeURIComponent(input);
+            break;
+          case 'urldecode':
+            result = decodeURIComponent(input);
+            break;
+        }
+        resultEl.textContent = result;
+        addCryptoHistory(currentCryptoType.toUpperCase(), input.substring(0, 20), result.substring(0, 30));
+      } catch (e) {
+        resultEl.innerHTML = `<span class="text-red-500">处理失败: ${e.message}</span>`;
+      }
+    }
+
+    async function simulateHash(type, input) {
+      // 使用Web Crypto API（实际实现）
+      const encoder = new TextEncoder();
+      const data = encoder.encode(input);
+      let algorithm = 'SHA-1';
+      if (type === 'SHA256') algorithm = 'SHA-256';
+      else if (type === 'SHA512') algorithm = 'SHA-512';
+      else if (type === 'MD5') {
+        // MD5不在Web Crypto中，模拟返回
+        return 'md5_' + Array.from(data).reduce((a, b) => a + b.toString(16).padStart(2, '0'), '').substring(0, 32);
+      }
+
+      const hashBuffer = await crypto.subtle.digest(algorithm, data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function addCryptoHistory(type, input, result) {
+      cryptoHistory.unshift({ type, input, result, time: new Date().toLocaleTimeString() });
+      if (cryptoHistory.length > 10) cryptoHistory.pop();
+      renderCryptoHistory();
+    }
+
+    function renderCryptoHistory() {
+      const container = document.getElementById('crypto-history');
+      if (cryptoHistory.length === 0) {
+        container.innerHTML = '<p class="text-xs text-muted text-center py-2">暂无历史</p>';
+        return;
+      }
+      container.innerHTML = cryptoHistory.map(h => `
+        <div class="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
+          <div>
+            <span class="text-primary font-medium">${h.type}</span>
+            <span class="text-muted ml-2">${h.input}${h.input.length >= 20 ? '...' : ''}</span>
+          </div>
+          <span class="text-muted">${h.time}</span>
+        </div>
+      `).join('');
+    }
+
+    function pasteCryptoInput() {
+      navigator.clipboard.readText().then(text => {
+        document.getElementById('crypto-input').value = text;
+      });
+    }
+
+    function clearCryptoInput() {
+      document.getElementById('crypto-input').value = '';
+      document.getElementById('crypto-result').innerHTML = '<span class="text-muted">等待处理...</span>';
+    }
+
+    function copyCryptoResult() {
+      const result = document.getElementById('crypto-result').textContent;
+      navigator.clipboard.writeText(result).then(() => {
+        alert('结果已复制');
+      });
+    }
+
+    function compareCrypto() {
+      alert('对比验证：输入相同的文本再次加密，对比结果是否一致');
+    }
+
+    function clearCryptoHistory() {
+      cryptoHistory = [];
+      renderCryptoHistory();
+    }
+    // ========== 加密工具功能结束 ==========
+
+    // ========== 数据填充模板功能 ==========
+    const sampleTemplates = {
+      user: {
+        name: '用户信息模板',
+        content: '姓名：{{name}}\n年龄：{{age}}\n邮箱：{{email}}\n手机：{{phone}}\n地址：{{address}}'
+      },
+      order: {
+        name: '订单信息模板',
+        content: '订单号：{{orderId}}\n商品名称：{{product}}\n价格：{{price}}\n数量：{{quantity}}\n下单时间：{{orderTime}}'
+      },
+      log: {
+        name: '日志格式模板',
+        content: '[{{timestamp}}] [{{level}}] {{message}}\n请求ID：{{requestId}}\n用户ID：{{userId}}'
+      }
+    };
+
+    function insertPlaceholder(name) {
+      const textarea = document.getElementById('template-content');
+      const pos = textarea.selectionStart;
+      const text = textarea.value;
+      textarea.value = text.slice(0, pos) + `{{${name}}}` + text.slice(pos);
+      textarea.focus();
+      parseTemplateVariables();
+    }
+
+    function parseTemplateVariables() {
+      const content = document.getElementById('template-content').value;
+      const regex = /\{\{(\w+)\}\}/g;
+      const variables = new Set();
+      let match;
+      while ((match = regex.exec(content)) !== null) {
+        variables.add(match[1]);
+      }
+      renderVariableInputs(Array.from(variables));
+    }
+
+    function renderVariableInputs(variables) {
+      const container = document.getElementById('variable-inputs');
+      if (variables.length === 0) {
+        container.innerHTML = '<p class="text-sm text-muted text-center py-4">编辑模板后自动识别变量</p>';
+        return;
+      }
+      container.innerHTML = variables.map(v => `
+        <div class="flex items-center gap-2">
+          <label class="w-24 text-sm text-text font-medium">{{${v}}}</label>
+          <input type="text" id="var-${v}" placeholder="输入${v}的值" class="flex-1 px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm focus:border-primary focus:outline-none">
+        </div>
+      `).join('');
+    }
+
+    function fillTemplate() {
+      const content = document.getElementById('template-content').value;
+      const autoFill = document.getElementById('auto-fill').checked;
+      const regex = /\{\{(\w+)\}\}/g;
+
+      let result = content;
+      let match;
+
+      while ((match = regex.exec(content)) !== null) {
+        const varName = match[1];
+        let value = '';
+        if (autoFill) {
+          value = generateFakeData(varName);
+        } else {
+          const input = document.getElementById(`var-${varName}`);
+          value = input ? input.value : '';
+        }
+        result = result.replace(new RegExp(`\\{\\{${varName}\\}\\}`, 'g'), value);
+      }
+
+      document.getElementById('filled-result').textContent = result;
+    }
+
+    function generateFakeData(varName) {
+      const fakeData = {
+        name: ['张三', '李四', '王五', '赵六', '钱七'][Math.floor(Math.random() * 5)],
+        age: Math.floor(Math.random() * 50) + 18,
+        email: `user${Math.floor(Math.random() * 1000)}@example.com`,
+        phone: `138${Math.floor(Math.random() * 100000000).toString().padStart(8, '0')}`,
+        address: ['北京市朝阳区', '上海市浦东新区', '广州市天河区', '深圳市南山区'][Math.floor(Math.random() * 4)],
+        date: new Date().toLocaleDateString('zh-CN'),
+        id: Math.random().toString(36).substring(2, 10),
+        company: ['腾讯科技', '阿里巴巴', '字节跳动', '百度'][Math.floor(Math.random() * 4)],
+        orderId: `ORD${Date.now()}`,
+        product: ['iPhone 15', 'MacBook Pro', 'iPad Air', 'AirPods'][Math.floor(Math.random() * 4)],
+        price: (Math.random() * 10000).toFixed(2),
+        quantity: Math.floor(Math.random() * 10) + 1,
+        orderTime: new Date().toLocaleString('zh-CN'),
+        timestamp: new Date().toISOString(),
+        level: ['INFO', 'WARN', 'ERROR'][Math.floor(Math.random() * 3)],
+        message: '这是一条示例日志消息',
+        requestId: Math.random().toString(36).substring(2, 15),
+        userId: `U${Math.floor(Math.random() * 10000)}`
+      };
+      return fakeData[varName] || varName;
+    }
+
+    function loadTemplate(type) {
+      const template = sampleTemplates[type];
+      if (template) {
+        document.getElementById('template-name').value = template.name;
+        document.getElementById('template-content').value = template.content;
+        parseTemplateVariables();
+      }
+    }
+
+    function saveTemplate() {
+      const name = document.getElementById('template-name').value;
+      const content = document.getElementById('template-content').value;
+      if (!name || !content) {
+        alert('请填写模板名称和内容');
+        return;
+      }
+      alert(`模板"${name}"已保存`);
+    }
+
+    function copyFilledResult() {
+      const result = document.getElementById('filled-result').textContent;
+      if (result && result !== '点击填充数据生成结果') {
+        navigator.clipboard.writeText(result).then(() => {
+          alert('结果已复制');
+        });
+      }
+    }
+
+    // 监听模板内容变化
+    document.addEventListener('DOMContentLoaded', () => {
+      const templateContent = document.getElementById('template-content');
+      if (templateContent) {
+        templateContent.addEventListener('input', parseTemplateVariables);
+      }
+    });
+    // ========== 数据填充模板功能结束 ==========
+
+    // ========== 假数据生成功能 ==========
+    function addField() {
+      const list = document.getElementById('field-list');
+      const item = document.createElement('div');
+      item.className = 'field-item p-3 bg-gray-50 rounded-lg border border-border';
+      item.innerHTML = `
+        <div class="grid grid-cols-3 gap-2">
+          <input type="text" placeholder="字段名" class="px-2 py-1.5 bg-white border border-border rounded text-sm focus:border-primary focus:outline-none">
+          <select class="px-2 py-1.5 bg-white border border-border rounded text-sm cursor-pointer">
+            <option value="name">姓名</option>
+            <option value="email">邮箱</option>
+            <option value="phone">手机号</option>
+            <option value="address">地址</option>
+            <option value="company">公司</option>
+            <option value="date">日期</option>
+            <option value="number">数字</option>
+            <option value="id">ID</option>
+          </select>
+          <button onclick="removeField(this)" class="px-2 py-1.5 bg-red-50 text-red-500 rounded text-sm hover:bg-red-100 cursor-pointer">删除</button>
+        </div>
+      `;
+      list.appendChild(item);
+    }
+
+    function removeField(btn) {
+      btn.closest('.field-item').remove();
+    }
+
+    function generateAllFakeData() {
+      const fields = [];
+      document.querySelectorAll('.field-item').forEach(item => {
+        const name = item.querySelector('input').value;
+        const type = item.querySelector('select').value;
+        if (name) fields.push({ name, type });
+      });
+
+      if (fields.length === 0) {
+        alert('请至少添加一个字段');
+        return;
+      }
+
+      const count = parseInt(document.getElementById('fake-data-count').value) || 10;
+      const format = document.getElementById('fake-data-format').value;
+
+      const data = [];
+      for (let i = 0; i < count; i++) {
+        const row = {};
+        fields.forEach(f => {
+          row[f.name] = generateFakeData(f.type);
+        });
+        data.push(row);
+      }
+
+      let output = '';
+      if (format === 'json') {
+        output = JSON.stringify(data, null, 2);
+      } else if (format === 'table') {
+        output = generateTableOutput(data, fields);
+      } else if (format === 'csv') {
+        output = generateCsvOutput(data, fields);
+      }
+
+      document.getElementById('fake-data-result').textContent = output;
+    }
+
+    function generateTableOutput(data, fields) {
+      let output = '|' + fields.map(f => f.name).join('|') + '|\n';
+      output += '|' + fields.map(() => '---').join('|') + '|\n';
+      data.forEach(row => {
+        output += '|' + fields.map(f => row[f.name]).join('|') + '|\n';
+      });
+      return output;
+    }
+
+    function generateCsvOutput(data, fields) {
+      let output = fields.map(f => f.name).join(',') + '\n';
+      data.forEach(row => {
+        output += fields.map(f => row[f.name]).join(',') + '\n';
+      });
+      return output;
+    }
+
+    function copyFakeData() {
+      const result = document.getElementById('fake-data-result').textContent;
+      navigator.clipboard.writeText(result).then(() => {
+        alert('数据已复制');
+      });
+    }
+
+    function downloadFakeData() {
+      const result = document.getElementById('fake-data-result').textContent;
+      const format = document.getElementById('fake-data-format').value;
+      const ext = format === 'json' ? 'json' : format === 'csv' ? 'csv' : 'txt';
+      const blob = new Blob([result], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fake-data.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    // ========== 假数据生成功能结束 ==========
+
+    // ========== 提示词模板功能 ==========
+    function selectPrompt(type) {
+      document.querySelectorAll('.prompt-item').forEach(item => {
+        item.classList.remove('bg-active', 'border-activeBorder');
+        item.classList.add('bg-gray-50', 'border-border');
+      });
+      event.currentTarget.classList.remove('bg-gray-50', 'border-border');
+      event.currentTarget.classList.add('bg-active', 'border-activeBorder');
+    }
+
+    function createNewPrompt() {
+      document.getElementById('prompt-name').value = '';
+      document.getElementById('prompt-content').value = '';
+    }
+
+    function savePrompt() {
+      const name = document.getElementById('prompt-name').value;
+      alert(`模板"${name}"已保存`);
+    }
+
+    function deletePrompt() {
+      if (confirm('确定删除此模板？')) {
+        alert('模板已删除');
+      }
+    }
+
+    function usePrompt() {
+      const content = document.getElementById('prompt-content').value;
+      const vars = content.match(/\{\{(\w+)\}\}/g) || [];
+      let result = content;
+      const inputs = document.querySelectorAll('#prompt-variables input, #prompt-variables textarea');
+      vars.forEach((v, i) => {
+        if (inputs[i]) {
+          result = result.replace(v, inputs[i].value || `[${v}]`);
+        }
+      });
+      document.getElementById('prompt-result').textContent = result;
+    }
+
+    function copyPromptResult() {
+      const result = document.getElementById('prompt-result').textContent;
+      navigator.clipboard.writeText(result).then(() => alert('已复制'));
+    }
+    // ========== 提示词模板功能结束 ==========
+
+    // ========== XML美化功能 ==========
+    function formatXml() {
+      const input = document.getElementById('xml-input').value.trim();
+      const output = document.getElementById('xml-output');
+      if (!input) { output.innerHTML = '<span class="text-muted">等待输入...</span>'; return; }
+      try {
+        // 简单格式化
+        let formatted = input.replace(/></g, '>\n<');
+        let indent = 0;
+        formatted = formatted.split('\n').map(line => {
+          if (line.match(/<\/\w/)) indent = Math.max(0, indent - 2);
+          const result = '  '.repeat(indent / 2) + line;
+          if (line.match(/<\w[^>]*[^\/]>$/)) indent += 2;
+          return result;
+        }).join('\n');
+        output.innerHTML = highlightXml(formatted);
+      } catch (e) {
+        output.innerHTML = `<span class="text-red-500">XML格式错误</span>`;
+      }
+    }
+
+    function highlightXml(xml) {
+      return xml
+        .replace(/(&lt;\/?[\w-]+)/g, '<span class="text-blue-600">$1</span>')
+        .replace(/([\w-]+)=/g, '<span class="text-purple-600">$1</span>=')
+        .replace(/"([^"]*)"/g, '"<span class="text-green-600">$1</span>"');
+    }
+
+    function compressXml() {
+      const input = document.getElementById('xml-input').value.trim();
+      const output = document.getElementById('xml-output');
+      if (!input) return;
+      const compressed = input.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
+      output.textContent = compressed;
+    }
+
+    function copyXmlOutput() {
+      const output = document.getElementById('xml-output').textContent;
+      navigator.clipboard.writeText(output).then(() => alert('已复制'));
+    }
+    // ========== XML美化功能结束 ==========
+
+    // ========== 文本比较功能 ==========
+    function compareText() {
+      const original = document.getElementById('diff-original').value.split('\n');
+      const modified = document.getElementById('diff-modified').value.split('\n');
+      const result = document.getElementById('diff-result');
+
+      const diff = [];
+      const maxLen = Math.max(original.length, modified.length);
+      for (let i = 0; i < maxLen; i++) {
+        const o = original[i] || '';
+        const m = modified[i] || '';
+        if (o === m) {
+          diff.push(`<span class="text-muted">${i + 1}: ${o || '(空行)'}</span>`);
+        } else if (!o) {
+          diff.push(`<span class="bg-green-100 text-green-700 px-1 rounded">+ ${i + 1}: ${m}</span>`);
+        } else if (!m) {
+          diff.push(`<span class="bg-red-100 text-red-700 px-1 rounded">- ${i + 1}: ${o}</span>`);
+        } else {
+          diff.push(`<span class="bg-red-100 text-red-700 px-1 rounded">- ${i + 1}: ${o}</span>`);
+          diff.push(`<span class="bg-green-100 text-green-700 px-1 rounded">+ ${i + 1}: ${m}</span>`);
+        }
+      }
+      result.innerHTML = diff.join('\n');
+    }
+    // ========== 文本比较功能结束 ==========
+
+    // ========== 笔记功能 ==========
+    function createNewNote() { alert('新建笔记功能'); }
+    function selectNote(id) { alert(`查看笔记 ${id}`); }
+    // ========== 笔记功能结束 ==========
+
+    // ========== 账号密码功能 ==========
+    function addPassword() { alert('添加账号密码功能'); }
+    // ========== 账号密码功能结束 ==========
 
     // 分组切换
     function switchGroup(group) {

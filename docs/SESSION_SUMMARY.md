@@ -1,7 +1,8 @@
 # Boost Tools 会话摘要
 
 > 创建时间：2026-03-31 晚
-> 下次继续时请让Claude读取此文件，然后调用 `user-to-story` 技能继续
+> 最后更新：2026-04-01
+> 下次继续时请让Claude读取此文件，然后调用 `brainstorming` 技能继续设计文档编写
 
 ---
 
@@ -29,62 +30,51 @@
 - 大模型API：Anthropic Messages（原生格式），模型手动输入
 
 ### 2.2 PRD文档 ✅
-- 文件路径：`D:\code\AI\boost-tools\prd\prd_v1.0.html`
+- 文件路径：`D:\AI\boost-tools\prd\prd_v1.0.html`
 - 包含：项目信息、名词说明、涉及端口、需求背景与目标、用户与使用场景、Epic概述、用户故事清单（30个Story）、详细方案（部分）、业务流程图、异常与边界处理、回滚方案、未来演进规划
 
-### 2.3 原型设计 🔶 部分完成
-- 文件路径：`D:\code\AI\boost-tools\prototype\prototype_v1.0.html`
-- 已完成功能：
-  - 主界面分组导航（5个分组 + 设置入口）
-  - 所有功能卡片可点击进入对应页面
-  - **TodoList周报功能完整原型**：
-    - 三栏布局：今日待办、明日待办、下周计划
-    - 新增任务弹窗（标题、描述、分组、截止日期）
-    - 拖拽调整任务分组
-    - 勾选完成，自动移到"本周已完成"
-    - 双击查看任务详情
-    - 未完成待办（昨日遗留）区域，黄色背景区分
-    - 删除任务功能
-    - 周报生成弹窗
-  - 设置页面（LLM API配置、快捷键设置、周报设置）
+### 2.3 原型设计 ✅ 全部完成
+- 文件路径：`D:\AI\boost-tools\prototype\prototype_v1.0.html`
+- 使用技能：`ui-ux-pro-max`
+- 设计系统：Primary #3B82F6, 字体 Plus Jakarta Sans, 背景 #FFFFFF, 导航 #F9FAFB
+
+**已完成功能原型（15个）：**
+
+| 序号 | 功能模块 | 所属分组 | 优先级 | 状态 |
+|------|----------|----------|--------|------|
+| 1 | TodoList周报 | AI辅助 | P0 | ✅ 完成 |
+| 2 | 文件解读 | AI辅助 | P0 | ✅ 完成 |
+| 3 | 假数据生成 | AI辅助 | P1 | ✅ 完成 |
+| 4 | 提示词模板 | AI辅助 | P1 | ✅ 完成 |
+| 5 | Aviator表达式 | 表达式生成 | P0 | ✅ 完成 |
+| 6 | Cron表达式 | 表达式生成 | P0 | ✅ 完成 |
+| 7 | 正则表达式 | 表达式生成 | P0 | ✅ 完成 |
+| 8 | JSON美化 | 格式化 | P0 | ✅ 完成 |
+| 9 | XML美化 | 格式化 | P1 | ✅ 完成 |
+| 10 | 文本比较 | 格式化 | P1 | ✅ 完成 |
+| 11 | UUID生成 | 工具 | P0 | ✅ 完成 |
+| 12 | 加密工具 | 工具 | P0 | ✅ 完成 |
+| 13 | 数据填充模板 | 工具 | P0 | ✅ 完成 |
+| 14 | 笔记 | 数据管理 | P1 | ✅ 完成 |
+| 15 | 账号密码 | 数据管理 | P1 | ✅ 完成 |
 
 ### 2.4 设计文档 ✅
-- 文件路径：`D:\code\AI\boost-tools\docs\plans\2026-03-31-boost-tools-design.md`
+- 文件路径：`D:\AI\boost-tools\docs\plans\2026-03-31-boost-tools-design.md`
 
 ### 2.5 设计系统 ✅
-- 文件路径：`D:\code\AI\boost-tools\design-system\boost-tools\MASTER.md`
+- 文件路径：`D:\AI\boost-tools\design-system\boost-tools\MASTER.md`
 - 配色：Primary #3B82F6（蓝色），背景纯白，左侧导航浅灰
 - 字体：Plus Jakarta Sans
 
 ---
 
-## 三、遗留问题（下次继续）
+## 三、下一步工作
 
-### 3.1 原型未完成
-以下14个功能模块只有占位页面（显示"功能开发中..."），需要补充原型设计：
+### 3.1 PRD待补充
+- 详细方案章节需要补充其他功能模块（目前只有TodoList相关的详细方案）
+- 原型沙盒切片需要嵌入PRD
 
-| 序号 | 功能模块 | 所属分组 | 优先级 |
-|------|----------|----------|--------|
-| 1 | 文件解读 | AI辅助 | P0 |
-| 2 | 假数据生成 | AI辅助 | P1 |
-| 3 | 提示词模板 | AI辅助 | P1 |
-| 4 | Aviator表达式 | 表达式生成 | P0 |
-| 5 | Cron表达式 | 表达式生成 | P0 |
-| 6 | 正则表达式 | 表达式生成 | P0 |
-| 7 | JSON美化 | 格式化 | P0 |
-| 8 | XML美化 | 格式化 | P1 |
-| 9 | 文本比较 | 格式化 | P1 |
-| 10 | UUID生成 | 工具 | P0 |
-| 11 | 加密工具 | 工具 | P0 |
-| 12 | 数据填充模板 | 工具 | P0 |
-| 13 | 笔记 | 数据管理 | P1 |
-| 14 | 账号密码 | 数据管理 | P1 |
-
-### 3.2 PRD待补充
-- 详细方案章节需要为其他功能模块补充（目前只有TodoList相关的详细方案）
-- 原型沙盒切片需要嵌入
-
-### 3.3 未执行步骤
+### 3.2 未执行步骤
 按照 `user-to-story` 技能流程，以下步骤未完成：
 - **步骤五**：输出流程图（部分完成，已输出3个流程图）
 - **步骤六**：产出最终版PRD（内嵌原型与切片）- 部分完成
@@ -119,25 +109,14 @@
 
 ---
 
-## 五、下次继续指令
-
-**请Claude执行以下操作**：
-
-1. 读取此摘要文件：`D:\code\AI\boost-tools\docs\SESSION_SUMMARY.md`
-2. 调用 `user-to-story` 技能继续工作
-3. 询问用户：
-   > "检测到上次会话有未完成的原型设计（14个功能模块）。您希望继续为哪些功能设计原型？选项：全部补充 / 选择性补充 / 当前原型已足够"
-
----
-
-## 六、文件结构
+## 五、文件结构
 
 ```
-D:\code\AI\boost-tools\
+D:\AI\boost-tools\
 ├── prd\
 │   └── prd_v1.0.html              # PRD文档（HTML）
 ├── prototype\
-│   └── prototype_v1.0.html        # 原型（仅TodoList完整）
+│   └── prototype_v1.0.html        # 原型（全部15个功能模块完成）
 ├── docs\
 │   ├── plans\
 │   │   └── 2026-03-31-boost-tools-design.md  # 设计文档
@@ -152,14 +131,116 @@ D:\code\AI\boost-tools\
 
 ---
 
-## 七、用户偏好记录
+## 六、用户偏好记录
 
 1. 偏好简洁现代风格，纯白背景
 2. 不喜欢绿色图标，改用蓝色
 3. 模型输入框让用户手动填写，不要下拉选择
 4. API格式固定为Anthropic Messages（原生）
 5. 占位符使用 `{{双花括号}}` 语法
+6. **原型设计使用 `ui-ux-pro-max` 技能**
+7. **样式参考已完成的 TodoList 周报原型**
 
 ---
 
-**晚安！明天继续。**
+**2026-04-01 更新：所有15个功能模块原型设计已完成，PRD文档已完成iframe原型沙盒切片嵌入，下一步可进入开发阶段。**
+
+---
+
+## 七、原型嵌入PRD完成情况（2026-04-01）
+
+已完成所有15个功能模块的iframe原型沙盒切片嵌入PRD文档：
+
+| 序号 | 功能模块 | 页面ID | 嵌入状态 |
+|------|----------|--------|----------|
+| 1 | 设置页面 | settings | ✅ 已嵌入 |
+| 2 | TodoList周报 | todo | ✅ 已嵌入 |
+| 3 | 文件解读 | file-read | ✅ 已嵌入 |
+| 4 | 假数据生成 | fake-data | ✅ 已嵌入 |
+| 5 | 提示词模板 | prompts | ✅ 已嵌入 |
+| 6 | Aviator表达式 | aviator | ✅ 已嵌入 |
+| 7 | Cron表达式 | cron | ✅ 已嵌入 |
+| 8 | 正则表达式 | regex | ✅ 已嵌入 |
+| 9 | JSON美化 | json | ✅ 已嵌入 |
+| 10 | UUID生成 | uuid | ✅ 已嵌入 |
+| 11 | 加密工具 | crypto | ✅ 已嵌入 |
+| 12 | 笔记 | notes | ✅ 已嵌入 |
+| 13 | 账号密码 | passwords | ✅ 已嵌入 |
+
+**嵌入格式示例：**
+```html
+<iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=[page-id]" sandbox="allow-scripts allow-same-origin"></iframe>
+```
+
+---
+
+## 八、原型设计待优化项（2026-04-01反馈）
+
+| 序号 | 功能模块 | 问题描述 | 优化方案 |
+|------|----------|----------|----------|
+| 1 | 假数据生成 | 表格格式输出为Markdown格式，粘贴到Excel后变为三行一列而非两列两行 | 改为输出真正的TSV/制表符分隔格式，或提供Excel直接复制功能 |
+| 2 | 所有功能页面 | 左侧分组导航选中后视觉高亮不够明显 | 增加选中状态的背景色、边框、图标颜色变化的视觉强化 |
+| 3 | 笔记 | 缺少删除笔记、查看详情、编辑修改功能 | 添加删除按钮、双击查看详情弹窗、编辑保存功能 |
+| 4 | 账号密码 | 密码虽隐藏但无法查看明文 | 添加眼睛图标，点击切换密码显示/隐藏 |
+
+---
+
+## 九、2026-04-01 设计文档编写进度（Brainstorming）
+
+### 9.1 已确认的设计决策
+
+| 决策项 | 决策内容 |
+|--------|----------|
+| 设计定位 | 在现有设计文档基础上补充优化 |
+| 重点内容 | 组件设计、服务架构、数据存储、API设计 |
+| 技术栈 | 保持现有选型（Electron + React + TypeScript + Ant Design） |
+| 文档组织 | 方案三：混合架构设计（全局架构 + 功能模块设计） |
+| 开机自启 | 不需要开机自启动功能 |
+
+### 9.2 已完成的设计展示
+
+#### ✅ 服务架构设计（已确认）
+- **主进程服务模块**：
+  - TrayService.js（系统托盘）
+  - ShortcutService.js（快捷键）
+  - StoreService.js（JSON存储）
+  - LLMService.js（大模型调用）
+  - HolidayService.js（节假日判断）
+  - SchedulerService.js（定时任务）
+  - FileService.js（文件处理）
+  - IPCBridge.js（IPC通信管理）
+
+- **渲染进程服务模块**：
+  - ipcClient.ts（IPC客户端封装）
+  - clipboardService.ts（剪贴板）
+  - storageService.ts（前端存储）
+
+#### ✅ IPC接口设计（已确认）
+- IPC通道定义（system、config、todos、file、prompts、notes、passwords、holiday、shortcut、scheduler）
+- 请求/响应格式规范（IPCResponse<T>）
+- 主进程与渲染进程通信机制已解释
+
+#### ✅ 数据存储设计（已确认）
+- 存储文件：config.json、todos.json、notes.json、passwords.json、prompts.json、weekly-reports.json
+- 详细数据结构定义：
+  - AppConfig（全局配置）
+  - TodoData/TodoItem（TodoList）
+  - NotesData/NoteItem（笔记）
+  - PasswordsData/PasswordItem（账号密码）
+  - PromptsData/PromptItem（提示词模板）
+  - WeeklyReportsData/WeeklyReportItem（周报记录）
+
+### 9.3 待完成的设计展示
+
+| 序号 | 设计章节 | 状态 |
+|------|----------|------|
+| 1 | API设计（LLM调用） | ⏳ 待展示 |
+| 2 | React组件设计（全局组件） | ⏳ 待展示 |
+| 3 | 功能模块组件设计（15个模块） | ⏳ 待展示 |
+| 4 | 编写设计文档 | ⏳ 待执行 |
+| 5 | 调用writing-plans技能 | ⏳ 待执行 |
+
+---
+
+**下次继续时，告诉Claude：**
+> "我正在编写Boost Tools设计文档，已完成服务架构、IPC接口、数据存储设计，请继续展示API设计和组件设计，然后编写完整设计文档。"

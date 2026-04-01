@@ -28,12 +28,37 @@
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       font-size: 14px;
+      transition: all 0.3s ease;
+      z-index: 1000;
     }
+    .toc.collapsed { width: 40px; padding: 10px; min-height: 40px; }
+    .toc.collapsed .toc-content { display: none; }
+    .toc.collapsed .toc-toggle { left: 8px; }
     .toc h4 { margin: 0 0 15px 0; font-size: 16px; color: #1a73e8; }
     .toc ul { list-style: none; padding: 0; margin: 0; }
     .toc li { margin: 8px 0; }
     .toc a { color: #666; text-decoration: none; }
     .toc a:hover { color: #1a73e8; }
+    .toc-toggle {
+      position: absolute;
+      top: 10px;
+      left: 170px;
+      width: 24px;
+      height: 24px;
+      background: #1a73e8;
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      border: none;
+    }
+    .toc-toggle:hover { background: #1557b0; transform: scale(1.1); }
+    .toc.collapsed .toc-toggle-icon::before { content: '→'; }
+    .toc-toggle-icon::before { content: '←'; }
 
     /* 标题样式 */
     h1 { font-size: 28px; color: #1a73e8; margin-bottom: 10px; border-bottom: 3px solid #1a73e8; padding-bottom: 10px; }
@@ -98,6 +123,31 @@
       font-weight: 600;
     }
 
+    /* 原型沙盒iframe样式 */
+    .prototype-sandbox {
+      width: 100%;
+      height: 500px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      background: #fff;
+      margin: 15px 0;
+    }
+    .sandbox-container {
+      position: relative;
+      margin: 15px 0;
+    }
+    .sandbox-label {
+      position: absolute;
+      top: -10px;
+      left: 15px;
+      background: #1a73e8;
+      color: #fff;
+      padding: 2px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      z-index: 1;
+    }
+
     /* Mermaid容器 */
     .mermaid { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 15px 0; }
 
@@ -106,23 +156,28 @@
   </style>
 </head>
 <body>
-  <div class="toc">
-    <h4>📑 目录导航</h4>
-    <ul>
-      <li><a href="#project-info">项目信息</a></li>
-      <li><a href="#definitions">名词说明</a></li>
-      <li><a href="#ports">一、涉及端口</a></li>
-      <li><a href="#background">二、需求背景</a></li>
-      <li><a href="#objectives">三、需求目标</a></li>
-      <li><a href="#users">四、用户与使用场景</a></li>
-      <li><a href="#epic-overview">五、Epic概述</a></li>
-      <li><a href="#stories">六、用户故事清单</a></li>
-      <li><a href="#details">七、详细方案</a></li>
-      <li><a href="#flowcharts">八、业务流程图</a></li>
-      <li><a href="#exceptions">九、异常与边界处理</a></li>
-      <li><a href="#rollback">十、回滚方案</a></li>
-      <li><a href="#roadmap">十一、未来演进规划</a></li>
-    </ul>
+  <div class="toc" id="toc">
+    <button class="toc-toggle" onclick="toggleToc()" title="收起/展开目录">
+      <span class="toc-toggle-icon"></span>
+    </button>
+    <div class="toc-content">
+      <h4>📑 目录导航</h4>
+      <ul>
+        <li><a href="#project-info">项目信息</a></li>
+        <li><a href="#definitions">名词说明</a></li>
+        <li><a href="#ports">一、涉及端口</a></li>
+        <li><a href="#background">二、需求背景</a></li>
+        <li><a href="#objectives">三、需求目标</a></li>
+        <li><a href="#users">四、用户与使用场景</a></li>
+        <li><a href="#epic-overview">五、Epic概述</a></li>
+        <li><a href="#stories">六、用户故事清单</a></li>
+        <li><a href="#details">七、详细方案</a></li>
+        <li><a href="#flowcharts">八、业务流程图</a></li>
+        <li><a href="#exceptions">九、异常与边界处理</a></li>
+        <li><a href="#rollback">十、回滚方案</a></li>
+        <li><a href="#roadmap">十一、未来演进规划</a></li>
+      </ul>
+    </div>
   </div>
 
   <div class="container">
@@ -133,14 +188,15 @@
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <div>
           <strong>项目名称：</strong>Boost Tools（效能助推器）<br>
-          <strong>文档版本：</strong>v1.0<br>
+          <strong>文档版本：</strong>v1.1<br>
           <strong>创建日期：</strong>2026-03-31<br>
+          <strong>更新日期：</strong>2026-04-01<br>
           <strong>作者：</strong>Claude AI + 用户协作
         </div>
         <div style="text-align: right;">
           <select style="padding: 8px 16px; border-radius: 4px; border: 1px solid #ccc;">
-            <option selected>v1.0（当前版本）</option>
-            <option>v1.1</option>
+            <option selected>v1.1（当前版本）</option>
+            <option>v1.0</option>
           </select>
         </div>
       </div>
@@ -154,10 +210,56 @@
           <th>作者</th>
         </tr>
         <tr>
+          <td>v1.1</td>
+          <td>2026-04-01</td>
+          <td>原型设计完成，补充14个功能模块详细方案，修正EARS格式，添加需求变更记录</td>
+          <td>Claude AI</td>
+        </tr>
+        <tr>
           <td>v1.0</td>
           <td>2026-03-31</td>
           <td>初始版本，包含15个功能模块的完整需求定义</td>
           <td>Claude AI</td>
+        </tr>
+      </table>
+
+      <!-- 需求变更记录 -->
+      <h4>需求变更记录</h4>
+      <table style="background: #fff8e1;">
+        <tr style="background: #ffecb3;">
+          <th>变更编号</th>
+          <th>功能模块</th>
+          <th>变更类型</th>
+          <th>变更描述</th>
+          <th>优先级</th>
+        </tr>
+        <tr>
+          <td>CR-001</td>
+          <td>假数据生成</td>
+          <td>优化</td>
+          <td>表格格式输出改为TSV/制表符分隔，支持直接粘贴到Excel显示为正确的行列结构</td>
+          <td><span class="priority-tag priority-p0">P0</span></td>
+        </tr>
+        <tr>
+          <td>CR-002</td>
+          <td>全局导航</td>
+          <td>新增</td>
+          <td>左侧分组导航选中状态视觉强化：背景色#EFF6FF、边框#3B82F6、图标和文字变蓝色加粗</td>
+          <td><span class="priority-tag priority-p1">P1</span></td>
+        </tr>
+        <tr>
+          <td>CR-003</td>
+          <td>笔记</td>
+          <td>新增</td>
+          <td>添加删除笔记（带确认提示）、双击查看详情弹窗、详情弹窗内编辑修改功能</td>
+          <td><span class="priority-tag priority-p1">P1</span></td>
+        </tr>
+        <tr>
+          <td>CR-004</td>
+          <td>账号密码</td>
+          <td>新增</td>
+          <td>密码列添加眼睛图标，点击切换密码明文/密文显示</td>
+          <td><span class="priority-tag priority-p0">P0</span></td>
         </tr>
       </table>
     </section>
@@ -830,10 +932,11 @@ flowchart TD
         </div>
         <h4>详细规则描述</h4>
         <ul>
-          <li><strong>触发条件</strong>：应用启动时自动创建系统托盘图标</li>
-          <li><strong>图标样式</strong>：应用Logo，悬停显示"Boost Tools"</li>
-          <li><strong>点击行为</strong>：左键点击显示/隐藏主窗口</li>
-          <li><strong>右键菜单</strong>：显示窗口、设置、退出</li>
+          <li>当应用启动时，系统应在系统托盘区域创建应用图标。</li>
+          <li>当用户将鼠标悬停在托盘图标上时，系统应显示"Boost Tools"提示文字。</li>
+          <li>当用户左键单击托盘图标时，系统应切换主窗口的显示/隐藏状态。</li>
+          <li>当用户右键单击托盘图标时，系统应显示右键菜单，包含"显示窗口"、"设置"、"退出"三个选项。</li>
+          <li>当用户点击"退出"菜单项时，系统应关闭应用并释放系统资源。</li>
         </ul>
       </div>
 
@@ -857,12 +960,12 @@ flowchart TD
         </div>
         <h4>详细规则描述</h4>
         <ul>
-          <li><strong>触发条件</strong>：用户点击TodoList页面的"新增任务"按钮</li>
-          <li><strong>表单字段</strong>：任务标题（必填）、任务描述（可选）、分组（今日/明日/下周，默认今日）、截止日期（可选）</li>
-          <li><strong>数据存储</strong>：任务保存到data/todos.json，包含id、title、description、status、dueDate、group、createTime</li>
+          <li>当用户点击"新增任务"按钮时，系统应弹出任务录入表单弹窗。</li>
+          <li>任务录入表单应包含：任务标题（必填）、任务描述（可选）、分组（今日/明日/下周，默认今日）、截止日期（可选）。</li>
+          <li>当用户点击"保存"按钮且任务标题为空时，系统应提示"请输入任务标题"。</li>
+          <li>当用户点击"保存"按钮且表单校验通过时，系统应将任务保存到data/todos.json文件。</li>
+          <li>当任务保存成功后，系统应刷新任务列表显示，并更新对应分组的任务计数。</li>
         </ul>
-        <h4>原型沙盒切片</h4>
-        <p><em>原型文件路径：prototype/prototype_v1.0.html，进入TodoList页面查看新增任务弹窗</em></p>
       </div>
 
       <!-- 功能模块：拖拽调整任务分组 -->
@@ -885,10 +988,10 @@ flowchart TD
         </div>
         <h4>详细规则描述</h4>
         <ul>
-          <li><strong>触发条件</strong>：用户拖拽任务卡片</li>
-          <li><strong>拖拽范围</strong>：今日待办、明日待办、下周计划、未完成待办（四个区域可互相拖拽）</li>
-          <li><strong>视觉反馈</strong>：拖拽时卡片半透明，目标分组边框高亮</li>
-          <li><strong>数据更新</strong>：实时更新任务的group字段</li>
+          <li>当用户开始拖拽任务卡片时，系统应将卡片显示为半透明状态。</li>
+          <li>当用户将任务卡片拖拽到目标分组区域时，系统应高亮显示目标分组的边框。</li>
+          <li>当用户在目标分组释放鼠标时，系统应更新任务的group字段并移动卡片到目标分组。</li>
+          <li>系统应支持今日待办、明日待办、下周计划、未完成待办四个区域之间的互相拖拽。</li>
         </ul>
       </div>
 
@@ -912,8 +1015,11 @@ flowchart TD
         </div>
         <h4>详细规则描述</h4>
         <ul>
-          <li><strong>触发条件</strong>：用户点击任务卡片的复选框</li>
-          <li><strong>完成行为</strong>：勾选后任务自动移动到"本周已完成"区域，显示绿色背景+删除线</li>
+          <li>当用户勾选任务的复选框时，系统应记录完成时间，并将任务移动到"本周已完成"区域。</li>
+          <li>当任务移动到"本周已完成"区域时，系统应以绿色背景和删除线样式显示。</li>
+          <li>当用户取消勾选已完成的任务时，系统应清除完成时间，并将任务恢复到原分组。</li>
+        </ul>
+      </div>
           <li><strong>取消完成</strong>：取消勾选后任务恢复到原分组</li>
           <li><strong>数据更新</strong>：更新status字段和completeTime字段</li>
         </ul>
@@ -978,7 +1084,10 @@ flowchart TD
           <li><strong>数据存储</strong>：配置保存到data/config.json</li>
         </ul>
         <h4>原型沙盒切片</h4>
-        <p><em>原型文件路径：prototype/prototype_v1.0.html，点击设置图标查看设置页面</em></p>
+        <div class="sandbox-container">
+          <span class="sandbox-label">设置页面</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=settings" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
       </div>
 
       <!-- 功能模块：周报自动生成 -->
@@ -990,16 +1099,305 @@ flowchart TD
         </div>
         <h4>详细规则描述</h4>
         <ul>
-          <li><strong>默认时间</strong>：每周五17:00</li>
-          <li><strong>节假日判断</strong>：读取holiday-cn子模块JSON数据</li>
-          <li><strong>调整规则</strong>：
-            <ul>
-              <li>若周五放假：周四17:00触发</li>
-              <li>若周六补班：周六17:00触发</li>
-            </ul>
-          </li>
-          <li><strong>周报内容</strong>：汇总周一至触发时间的已完成任务，按日期分组</li>
-          <li><strong>输出格式</strong>：Markdown或纯文本（用户可选）</li>
+          <li>系统应在每周五17:00自动触发周报生成任务。</li>
+          <li>当周五为国家法定节假日时，系统应在周四17:00触发周报生成。</li>
+          <li>当周六为调休工作日时，系统应在周六17:00触发周报生成。</li>
+          <li>当触发周报生成时，系统应汇总周一至触发时间的所有已完成任务，按日期分组排列。</li>
+          <li>当用户选择Markdown格式时，系统应输出带有格式标记的周报文本。</li>
+        </ul>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">TodoList周报</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=todo" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：文件解读 -->
+      <div class="feature-card">
+        <h3>功能：文件解读（BT-006）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>所有用户</span>
+          <span>📋 <strong>前置条件：</strong>已配置LLM API</span>
+        </div>
+        <h4>详细规则描述</h4>
+        <ul>
+          <li>当用户点击上传区域或拖拽文件到上传区时，系统应显示文件预览信息（文件名、大小、类型）。</li>
+          <li>若用户上传非Word/PDF格式文件，系统应弹出提示"仅支持.doc、.docx、.pdf格式"。</li>
+          <li>若用户上传文件大小超过50MB，系统应弹出提示"文件大小超过限制（50MB）"。</li>
+          <li>当用户点击"开始AI解读"按钮时，系统应显示加载状态，并调用大模型API进行内容分析。</li>
+          <li>当AI解读完成后，系统应将结果分为"文件概述"、"重点内容提取"、"AI建议"三个区块展示。</li>
+          <li>对于每条提取的重点内容，系统应标注其在原文中的位置（章节名+行号）。</li>
+        </ul>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">文件解读</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=file-read" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：假数据生成 -->
+      <div class="feature-card">
+        <h3>功能：假数据生成（BT-007）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>开发人员、测试人员</span>
+          <span>📋 <strong>前置条件：</strong>无</span>
+        </div>
+        <h4>详细规则描述</h4>
+        <ul>
+          <li>当用户点击"添加字段"按钮时，系统应新增一行字段定义，包含字段名输入框和数据类型下拉选择。</li>
+          <li>系统应提供以下预设数据类型：姓名、邮箱、手机号、地址、公司、日期、数字、ID。</li>
+          <li>系统应限制单次生成数量为1-100条，默认10条。</li>
+          <li>当用户选择JSON格式输出时，系统应输出标准JSON数组，带缩进格式化。</li>
+          <li>当用户选择CSV格式输出时，系统应输出逗号分隔值，首行为字段名。</li>
+          <li>当用户选择表格格式输出时，系统应输出制表符分隔（TSV）格式，确保可直接粘贴到Excel显示为多列多行。</li>
+        </ul>
+        <h4>⚠️ 需求变更 CR-001</h4>
+        <p style="background:#fff8e1; padding:10px; border-radius:6px; font-size:14px;">
+          <strong>变更说明：</strong>表格格式输出改为TSV格式（制表符分隔），而非Markdown表格格式。<br>
+          <strong>原因：</strong>Markdown表格格式粘贴到Excel后变为三行一列，不符合预期。<br>
+          <strong>解决方案：</strong>输出 <code>name\temail\n张三\tuser123@example.com</code> 格式，粘贴到Excel自动识别为多列。
+        </p>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">假数据生成</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=fake-data" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：提示词模板 -->
+      <div class="feature-card">
+        <h3>功能：提示词模板（BT-008）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>AI使用者</span>
+          <span>📋 <strong>前置条件：</strong>无</span>
+        </div>
+        <h4>详细规则描述</h4>
+        <ul>
+          <li>当用户点击"新建模板"按钮时，系统应创建空白模板并进入编辑模式。</li>
+          <li>系统应识别<code>{{变量名}}</code>格式的占位符，并在变量输入区自动生成对应输入框。</li>
+          <li>当用户点击快捷占位符按钮时，系统应将对应的占位符插入到模板内容中。</li>
+          <li>当用户点击"保存"按钮时，系统应将模板保存到本地存储。</li>
+          <li>当用户点击"生成提示词"按钮时，系统应将模板中的占位符替换为用户输入的值，并显示最终结果。</li>
+        </ul>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">提示词模板</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=prompts" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：Aviator表达式 -->
+      <div class="feature-card">
+        <h3>功能：Aviator表达式（BT-009）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>开发人员</span>
+          <span>📋 <strong>前置条件：</strong>无</span>
+        </div>
+        <h4>详细规则描述</h4>
+        <ul>
+          <li>当用户点击运算符按钮（+、-、*、/、==、!=、>、<、&&、||、(、)）时，系统应将其添加到表达式预览区。</li>
+          <li>当用户点击函数按钮（string.length、math.abs等）时，系统应将函数名添加到表达式预览区。</li>
+          <li>系统应在表达式预览区以不同颜色区分运算符（蓝色）、函数（紫色）、数字（绿色）、变量（黄色）。</li>
+          <li>当用户点击Token标签时，系统应从表达式中移除该Token。</li>
+          <li>当用户点击示例模板时，系统应加载预设的表达式内容。</li>
+        </ul>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">Aviator表达式</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=aviator" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：Cron表达式 -->
+      <div class="feature-card">
+        <h3>功能：Cron表达式（BT-010）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>开发人员、运维人员</span>
+          <span>📋 <strong>前置条件：</strong>无</span>
+        </div>
+        <h4>详细规则描述</h4>
+        <ul>
+          <li>系统应提供秒、分、时、日、月、周六个时间字段的选择器。</li>
+          <li>每个字段应支持"每*"、"指定值"、"范围"、"间隔"四种模式。</li>
+          <li>当用户修改任一字段值时，系统应实时更新生成的Cron表达式。</li>
+          <li>系统应显示最近5次执行时间预览。</li>
+          <li>当用户点击预设模板时，系统应加载对应的Cron表达式配置。</li>
+          <li>当用户输入已有Cron表达式并点击"解析"按钮时，系统应解析并展示各字段含义。</li>
+        </ul>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">Cron表达式</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=cron" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：正则表达式 -->
+      <div class="feature-card">
+        <h3>功能：正则表达式（BT-011）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>开发人员</span>
+          <span>📋 <strong>前置条件：</strong>无</span>
+        </div>
+        <h4>详细规则描述</h4>
+        <ul>
+          <li>系统应提供17种常用正则预设：邮箱、手机号、身份证、URL、IP地址、日期、时间、数字、中文、英文、密码强度、用户名、QQ号、微信号、银行卡、十六进制、HTML标签。</li>
+          <li>当用户点击预设按钮时，系统应将对应的正则表达式填入输入框。</li>
+          <li>系统应支持全局匹配(g)、忽略大小写(i)、多行模式(m)三个选项。</li>
+          <li>当用户点击"测试匹配"按钮时，系统应对测试文本执行正则匹配并高亮显示匹配结果。</li>
+          <li>若匹配成功，系统应显示匹配到的内容列表；若无匹配，显示"无匹配结果"。</li>
+        </ul>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">正则表达式</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=regex" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：JSON美化 -->
+      <div class="feature-card">
+        <h3>功能：JSON美化（BT-012）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>开发人员</span>
+          <span>📋 <strong>前置条件：</strong>无</span>
+        </div>
+        <h4>详细规则描述</h4>
+        <ul>
+          <li>当用户点击"格式化"按钮时，系统应以指定缩进格式化JSON并显示结果。</li>
+          <li>当用户点击"压缩"按钮时，系统应移除所有空白字符，输出单行JSON。</li>
+          <li>系统应支持2空格、4空格、Tab三种缩进方式。</li>
+          <li>若JSON格式错误，系统应显示具体错误信息和错误位置。</li>
+          <li>系统应高亮显示键名（蓝色）、字符串值（绿色）、数字值（黄色）、布尔值（紫色）、null（灰色）。</li>
+          <li>系统应显示行数、文件大小、键数量三个统计指标。</li>
+        </ul>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">JSON美化</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=json" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：UUID生成 -->
+      <div class="feature-card">
+        <h3>功能：UUID生成（BT-013）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>开发人员</span>
+          <span>📋 <strong>前置条件：</strong>无</span>
+        </div>
+        <h4>详细规则描述</h4>
+        <ul>
+          <li>系统应支持UUID v4（随机）、UUID v1（时间戳）、Nil UUID（全0）三种版本。</li>
+          <li>系统应允许设置生成数量（1-100），默认10个。</li>
+          <li>当用户选择"标准格式"时，系统应输出带连字符的UUID（如 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx）。</li>
+          <li>当用户选择"无连字符"格式时，系统应输出32位连续字符。</li>
+          <li>当用户选择"大写"格式时，系统应输出大写字母形式的UUID。</li>
+          <li>当用户设置前缀时，系统应在每个UUID前添加指定前缀。</li>
+        </ul>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">UUID生成</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=uuid" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：加密工具 -->
+      <div class="feature-card">
+        <h3>功能：加密工具（BT-014）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>开发人员、安全人员</span>
+          <span>📋 <strong>前置条件：</strong>无</span>
+        </div>
+        <h4>详细规则描述</h4>
+        <ul>
+          <li>系统应提供MD5、SHA1、SHA256、SHA512四种哈希算法。</li>
+          <li>系统应提供Base64编码、Base64解码功能。</li>
+          <li>系统应提供URL编码、URL解码功能。</li>
+          <li>当用户点击算法按钮时，系统应以蓝色高亮显示选中状态。</li>
+          <li>当用户点击"执行加密/编码"按钮时，系统应根据选中算法处理输入文本并显示结果。</li>
+          <li>系统应保存最近10条处理记录，包含算法类型、输入摘要、时间。</li>
+        </ul>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">加密工具</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=crypto" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：笔记 -->
+      <div class="feature-card">
+        <h3>功能：笔记（BT-015）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>所有用户</span>
+          <span>📋 <strong>前置条件：</strong>无</span>
+        </div>
+        <h4>详细规则描述</h4>
+        <ul>
+          <li>当用户点击"新建笔记"按钮或添加卡片时，系统应创建新笔记并进入编辑模式。</li>
+          <li>系统应以卡片网格形式展示笔记列表，显示标题、创建时间、内容摘要。</li>
+          <li>当用户双击笔记卡片时，系统应弹出详情弹窗显示完整内容。</li>
+          <li>在详情弹窗中，当用户点击"编辑"按钮时，系统应进入编辑模式。</li>
+          <li>当用户点击"删除"按钮时，系统应弹出确认提示"确定删除此笔记？"，确认后删除笔记。</li>
+          <li>当用户点击置顶图标时，系统应将笔记标记为置顶并排序靠前显示。</li>
+        </ul>
+        <h4>⚠️ 需求变更 CR-003</h4>
+        <p style="background:#fff8e1; padding:10px; border-radius:6px; font-size:14px;">
+          <strong>新增功能：</strong><br>
+          1. 删除笔记功能（带确认提示）<br>
+          2. 双击查看详情弹窗<br>
+          3. 详情弹窗内编辑修改功能<br>
+          4. 编辑后保存功能
+        </p>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">笔记</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=notes" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：账号密码 -->
+      <div class="feature-card">
+        <h3>功能：账号密码（BT-016）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>所有用户</span>
+          <span>📋 <strong>前置条件：</strong>无</span>
+        </div>
+        <h4>详细规则描述</h4>
+        <ul>
+          <li>系统应以表格形式展示账号列表，包含平台名称、账号、密码、操作四列。</li>
+          <li>密码列应默认显示为密文（如 ••••••••），不可见明文。</li>
+          <li>当用户点击眼睛图标时，系统应切换该行密码的显示/隐藏状态。</li>
+          <li>当用户点击"复制密码"按钮时，系统应将密码复制到剪贴板并提示"已复制"。</li>
+          <li>当用户点击"添加"按钮时，系统应弹出添加弹窗，包含平台名称、账号、密码输入框。</li>
+          <li>系统应支持按平台名称模糊搜索。</li>
+        </ul>
+        <h4>⚠️ 需求变更 CR-004</h4>
+        <p style="background:#fff8e1; padding:10px; border-radius:6px; font-size:14px;">
+          <strong>新增功能：</strong>密码显示/隐藏切换（眼睛图标）<br>
+          <strong>交互说明：</strong>点击眼睛图标时，密码在明文和密文之间切换显示。
+        </p>
+        <h4>原型沙盒切片</h4>
+        <div class="sandbox-container">
+          <span class="sandbox-label">账号密码</span>
+          <iframe class="prototype-sandbox" src="../prototype/prototype_v1.0.html?sandbox=true&focus=passwords" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- 功能模块：全局导航 -->
+      <div class="feature-card">
+        <h3>功能：全局导航（跨模块）</h3>
+        <div class="meta-info">
+          <span>📌 <strong>涉及角色：</strong>所有用户</span>
+          <span>📋 <strong>前置条件：</strong>应用已启动</span>
+        </div>
+        <h4>⚠️ 需求变更 CR-002</h4>
+        <p style="background:#fff8e1; padding:10px; border-radius:6px; font-size:14px;">
+          <strong>变更说明：</strong>左侧分组导航选中状态视觉强化<br>
+          <strong>优化方案：</strong>
+        </p>
+        <ul>
+          <li>选中项背景色：<code>#EFF6FF</code>（浅蓝色背景）</li>
+          <li>选中项边框：<code>2px solid #3B82F6</code>（蓝色边框）</li>
+          <li>选中项图标颜色：<code>#3B82F6</code>（蓝色）</li>
+          <li>选中项文字颜色：<code>#3B82F6</code>（蓝色）并加粗（font-weight: 600）</li>
         </ul>
       </div>
 
@@ -1196,5 +1594,11 @@ flowchart TD
       </ul>
     </section>
   </div>
+<script>
+    function toggleToc() {
+      const toc = document.getElementById('toc');
+      toc.classList.toggle('collapsed');
+    }
+  </script>
 </body>
 </html>
