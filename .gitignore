@@ -1,5 +1,26 @@
+# VS Code
 .vscode/
+
+# IDEA / WebStorm / 所有 JetBrains 编辑器
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# 构建输出
 dist/
-*.log
+build/
+out/
+
+# 依赖
 node_modules/
+
+# 日志
+*.log
+
+# 系统文件
 .DS_Store
+Thumbs.db
+
+# 你的本地数据文件夹
+data/
