@@ -66,7 +66,7 @@ export interface LLMResponse {
   error?: string;
 }
 
-// Neutralino 类型声明
+// Neutralino 类型声明（保留兼容）
 declare global {
   interface Window {
     Neutralino?: {
@@ -76,6 +76,10 @@ declare global {
         getData: (key: string) => Promise<string>;
         setData: (key: string, value: string) => Promise<void>;
       };
+    };
+    // Tauri 类型声明
+    __TAURI__?: {
+      invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
     };
   }
 }

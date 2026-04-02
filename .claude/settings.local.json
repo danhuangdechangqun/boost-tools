@@ -40,7 +40,12 @@
       "Bash(node scripts/generate-icons.js)",
       "Bash(npm run:*)",
       "Bash(npm i:*)",
-      "Bash(netstat -ano)"
+      "Bash(netstat -ano)",
+      "Bash(npm --version)",
+      "Bash(winget --version)",
+      "Bash(choco --version)",
+      "Bash(mkdir -p ~/.cargo)",
+      "Bash(npx tauri:*)"
     ]
   }
 }

@@ -29,7 +29,7 @@ const groupFeatures: Record<string, Feature[]> = {
   ],
   expr: [
     { id: 'aviator', icon: Calculator, name: 'Aviator表达式', desc: '可视化拼接Aviator表达式' },
-    { id: 'cron', icon: Clock, name: 'Cron表达式', desc: '点点点生成Cron表达式' },
+    { id: 'cron', icon: Clock, name: 'Cron表达式', desc: '生成Cron表达式' },
     { id: 'regex', icon: Regex, name: '正则表达式', desc: '17种常用正则预设' }
   ],
   fmt: [

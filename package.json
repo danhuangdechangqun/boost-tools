@@ -1,16 +1,17 @@
 {
   "name": "boost-tools",
   "version": "1.0.0",
-  "description": "效能助推器 - Neutralino.js本地化提效工具集",
+  "description": "效能助推器 - Tauri本地化提效工具集",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "neu:dev": "neu run",
-    "neu:build": "neu build --release",
-    "neu:update": "neu update"
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@ant-design/icons": "^5.2.0",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-global-shortcut": "^2.3.1",
     "antd": "^5.12.0",
     "crypto-js": "^4.2.0",
     "dayjs": "^1.11.0",

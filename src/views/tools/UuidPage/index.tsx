@@ -11,6 +11,7 @@ const UuidPage: React.FC<UuidPageProps> = ({ onBack }) => {
   const [count, setCount] = useState(1);
   const [uppercase, setUppercase] = useState(false);
   const [keepHyphen, setKeepHyphen] = useState(true);
+  const [prefix, setPrefix] = useState('');
   const [uuids, setUuids] = useState<string[]>([]);
 
   const generate = () => {
@@ -19,6 +20,10 @@ const UuidPage: React.FC<UuidPageProps> = ({ onBack }) => {
       let uuid = uuidv4();
       if (!keepHyphen) uuid = uuid.replace(/-/g, '');
       if (uppercase) uuid = uuid.toUpperCase();
+      // 添加前缀
+      if (prefix) {
+        uuid = prefix + uuid;
+      }
       results.push(uuid);
     }
     setUuids(results);
@@ -37,10 +42,19 @@ const UuidPage: React.FC<UuidPageProps> = ({ onBack }) => {
       </div>
 
       <div style={{ flex: 1, padding: 16, overflow: 'auto', display: 'flex', gap: 16 }}>
-        <Card title="选项" style={{ width: 300 }}>
+        <Card title="选项" style={{ width: 320 }}>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', marginBottom: 8 }}>生成条数</label>
             <InputNumber min={1} max={100} value={count} onChange={(v) => setCount(v || 1)} style={{ width: '100%' }} />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', marginBottom: 8 }}>自定义前缀</label>
+            <Input
+              placeholder="如 user_、order- 等"
+              value={prefix}
+              onChange={(e) => setPrefix(e.target.value)}
+              style={{ width: '100%' }}
+            />
           </div>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', marginBottom: 8 }}>大写</label>
@@ -58,7 +72,7 @@ const UuidPage: React.FC<UuidPageProps> = ({ onBack }) => {
             dataSource={uuids}
             renderItem={(item) => (
               <List.Item extra={<Button size="small" icon={<Copy size={12} />} onClick={() => { navigator.clipboard.writeText(item); message.success('已复制'); }} />}>
-                <code style={{ fontFamily: 'monospace' }}>{item}</code>
+                <code style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{item}</code>
               </List.Item>
             )}
           />

@@ -31,7 +31,8 @@ const PromptsPage: React.FC<PromptsPageProps> = ({ onBack }) => {
 
   const handleSave = async (values: any) => {
     const template = values.template;
-    const placeholderRegex = /\{\{(\w+)\}\}/g;
+    // 支持中文和英文占位符
+    const placeholderRegex = /\{\{([\u4e00-\u9fa5\w]+)\}\}/g;
     const placeholders: string[] = [];
     let match;
     while ((match = placeholderRegex.exec(template)) !== null) {
@@ -83,9 +84,9 @@ const PromptsPage: React.FC<PromptsPageProps> = ({ onBack }) => {
     setFilledResult(result);
   };
 
-  // Extract placeholders from template
+  // Extract placeholders from template - 支持中文和英文
   const getPlaceholders = (template: string) => {
-    const regex = /\{\{(\w+)\}\}/g;
+    const regex = /\{\{([\u4e00-\u9fa5\w]+)\}\}/g;
     const placeholders: string[] = [];
     let match;
     while ((match = regex.exec(template)) !== null) {
@@ -148,22 +149,52 @@ const PromptsPage: React.FC<PromptsPageProps> = ({ onBack }) => {
         </Form>
       </Modal>
 
-      <Modal title="填充模板" open={fillModalOpen} onCancel={() => setFillModalOpen(false)} footer={null} width={600}>
-        <Form form={fillForm} layout="vertical" onFinish={handleFill}>
-          {selectedPrompt && getPlaceholders(selectedPrompt.template).map(name => (
-            <Form.Item key={name} name={name} label={name} rules={[{ required: true }]}>
-              <Input.TextArea rows={2} placeholder={`输入${name}`} />
-            </Form.Item>
-          ))}
-          <Button type="primary" htmlType="submit" block>生成</Button>
-        </Form>
+      <Modal title="使用模板" open={fillModalOpen} onCancel={() => setFillModalOpen(false)} footer={null} width={800}>
+        <div style={{ display: 'flex', gap: 16 }}>
+          {/* 左侧：模板内容展示 */}
+          <div style={{ flex: 1, borderRight: '1px solid #E5E7EB', paddingRight: 16 }}>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>模板内容</div>
+            <pre style={{
+              background: '#F9FAFB',
+              padding: 12,
+              borderRadius: 8,
+              whiteSpace: 'pre-wrap',
+              fontSize: 13,
+              maxHeight: 300,
+              overflow: 'auto'
+            }}>
+              {selectedPrompt?.template}
+            </pre>
+          </div>
+
+          {/* 右侧：占位符填写 */}
+          <div style={{ flex: 1 }}>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>填写占位符</div>
+            <Form form={fillForm} layout="vertical" onFinish={handleFill}>
+              {selectedPrompt && getPlaceholders(selectedPrompt.template).length > 0 ? (
+                getPlaceholders(selectedPrompt.template).map(name => (
+                  <Form.Item key={name} name={name} label={name} rules={[{ required: true }]}>
+                    <Input.TextArea rows={2} placeholder={`输入${name}的值`} />
+                  </Form.Item>
+                ))
+              ) : (
+                <div style={{ color: '#6B7280', padding: 12 }}>
+                  此模板没有占位符，可直接生成
+                </div>
+              )}
+              <Button type="primary" htmlType="submit" block style={{ marginTop: 8 }}>生成结果</Button>
+            </Form>
+          </div>
+        </div>
+
+        {/* 生成结果展示 */}
         {filledResult && (
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 16, borderTop: '1px solid #E5E7EB', paddingTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span>生成结果</span>
+              <span style={{ fontWeight: 500 }}>生成结果</span>
               <Button icon={<Copy size={14} />} onClick={() => { navigator.clipboard.writeText(filledResult); message.success('已复制'); }}>复制</Button>
             </div>
-            <pre style={{ background: '#F9FAFB', padding: 12, borderRadius: 8, whiteSpace: 'pre-wrap' }}>{filledResult}</pre>
+            <pre style={{ background: '#F0FDF4', padding: 12, borderRadius: 8, whiteSpace: 'pre-wrap', border: '1px solid #86EFAC' }}>{filledResult}</pre>
           </div>
         )}
       </Modal>
