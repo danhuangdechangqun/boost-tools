@@ -2,6 +2,32 @@
 
 效能助推器 - 基于 Tauri 的本地化提效工具集
 
+## 快速启动
+
+```bash
+# 进入项目根目录（包含 package.json 的目录）
+cd boost-tools
+
+# 安装依赖（首次运行）
+npm install
+
+# 启动开发环境
+npm run tauri:dev
+```
+
+> **注意:** 首次启动会编译 Rust 后端，可能需要几分钟。后续启动会使用缓存，速度更快。
+
+### 其他命令
+
+| 命令 | 说明 |
+|------|------|
+| `npm run dev` | 仅启动前端开发服务器（不含 Tauri 桌面端） |
+| `npm run build` | 构建前端生产版本 |
+| `npm run tauri:dev` | 启动 Tauri 开发模式（推荐） |
+| `npm run tauri:build` | 构建 Tauri 桌面应用安装包 |
+
+---
+
 ## 环境搭建
 
 ### 步骤 1: Node.js 安装

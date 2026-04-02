@@ -45,7 +45,10 @@
       "Bash(winget --version)",
       "Bash(choco --version)",
       "Bash(mkdir -p ~/.cargo)",
-      "Bash(npx tauri:*)"
+      "Bash(npx tauri:*)",
+      "Bash(taskkill:*)",
+      "Bash(powershell:*)",
+      "Bash(tasklist)"
     ]
   }
 }
