@@ -80,37 +80,29 @@ dir "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC"
 
 **配置 Rustup 镜像源 (PowerShell):**
 ```powershell
-$env:RUSTUP_DIST_SERVER = "https://mirrors.tuna.tsinghua.edu.cn/rustup"
-$env:RUSTUP_UPDATE_ROOT = "https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup"
+$env:RUSTUP_DIST_SERVER="https://mirrors.ustc.edu.cn/rust-static"
+$env:RUSTUP_UPDATE_ROOT="https://mirrors.ustc.edu.cn/rust-static/rustup"
 ```
 
-**下载安装器:**
-```
-https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe
-```
+**安装:**
 
-运行 `rustup-init.exe`，选择默认安装即可。
-
-**设置稳定版:**
-```bash
-rustup default stable
+```
+Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe" -UseBasicParsing ; .\rustup-init.exe -y
 ```
 
 **配置 Cargo 镜像源:**
 
 创建或编辑 `%USERPROFILE%\.cargo\config.toml`:
 ```toml
+New-Item -Path $env:USERPROFILE\.cargo -ItemType Directory -Force | Out-Null
+@"
 [source.crates-io]
-replace-with = 'rsproxy-sparse'
-
-[source.rsproxy-sparse]
-registry = "https://rsproxy.cn/crates.io-index"
-
-[registries.rsproxy]
-index = "https://rsproxy.cn/crates.io-index"
-
+replace-with = 'ustc'
+[source.ustc]
+registry = "https://mirrors.ustc.edu.cn/crates.io-index"
 [net]
-offline = false
+git-fetch-with-cli = true
+"@ | Out-File $env:USERPROFILE\.cargo\config.toml -Encoding utf8
 ```
 
 **验证安装:**
@@ -138,6 +130,8 @@ npm install
 ### 步骤 5: 启动开发环境
 
 ```bash
+npm install -g @tauri-apps/cli
+npm install 
 npm run tauri:dev
 ```
 
