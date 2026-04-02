@@ -1,39 +1,24 @@
-// 存储服务 - 支持Neutralino和localStorage双模式
+// 存储服务 - 使用 Tauri 文件存储
 
 import CryptoJS from 'crypto-js';
 import { AppConfig, TodoItem, NoteItem, PasswordItem, PromptItem } from '@/types';
 
 const ENCRYPT_KEY = 'boost-tools-secret-key-2026';
 
-// 检测是否在Neutralino环境中
-const isNeutralinoEnv = (): boolean => {
-  return typeof window !== 'undefined' && window.Neutralino !== undefined;
-};
+// Tauri invoke 辅助函数
+let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<any>) | null = null;
 
-// 等待Neutralino初始化
-const waitForNeutralino = async (): Promise<boolean> => {
-  if (!isNeutralinoEnv()) return false;
-
-  return new Promise((resolve) => {
-    if (window.Neutralino?.init) {
-      window.Neutralino.init();
-      window.Neutralino.on('ready', () => resolve(true));
-      window.Neutralino.on('error', () => resolve(false));
-    } else {
-      resolve(false);
+const getTauriInvoke = async () => {
+  if (!tauriInvoke) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      tauriInvoke = invoke;
+    } catch {
+      // 非 Tauri 环境，使用 localStorage 后备
+      console.log('Using localStorage fallback');
     }
-  });
-};
-
-let neutralinoReady = false;
-
-export const initStorage = async () => {
-  neutralinoReady = await waitForNeutralino();
-  if (neutralinoReady) {
-    console.log('Neutralino storage initialized');
-  } else {
-    console.log('Using localStorage fallback');
   }
+  return tauriInvoke;
 };
 
 // 加密函数
@@ -50,36 +35,59 @@ export const decrypt = (data: string): string => {
 // 通用存储方法
 export const storage = {
   async read<T>(key: string, encrypted: boolean = false): Promise<T> {
+    const invoke = await getTauriInvoke();
+    const filename = `${key}.json`;
+
     try {
-      if (neutralinoReady && window.Neutralino?.storage) {
-        const data = await window.Neutralino.storage.getData(key);
-        const content = encrypted ? decrypt(data) : data;
-        return JSON.parse(content) as T;
+      if (invoke) {
+        // Tauri 环境：读取文件
+        const content = await invoke('read_json_file', { filename });
+        if (!content || content === '{}') {
+          return {} as T;
+        }
+        const data = encrypted ? decrypt(content) : content;
+        return JSON.parse(data) as T;
       } else {
-        // localStorage后备
+        // localStorage 后备
         const data = localStorage.getItem(key);
         if (!data) return {} as T;
         const content = encrypted ? decrypt(data) : data;
         return JSON.parse(content) as T;
       }
-    } catch {
+    } catch (error) {
+      console.error('Storage read error:', error);
       return {} as T;
     }
   },
 
   async write<T>(key: string, data: T, encrypted: boolean = false) {
+    const invoke = await getTauriInvoke();
+    const filename = `${key}.json`;
+
     try {
-      const content = JSON.stringify(data);
+      const content = JSON.stringify(data, null, 2);
       const output = encrypted ? encrypt(content) : content;
 
-      if (neutralinoReady && window.Neutralino?.storage) {
-        await window.Neutralino.storage.setData(key, output);
+      if (invoke) {
+        // Tauri 环境：写入文件
+        await invoke('write_json_file', { filename, content: output });
       } else {
+        // localStorage 后备
         localStorage.setItem(key, output);
       }
     } catch (error) {
       console.error('Storage write error:', error);
     }
+  }
+};
+
+// 初始化存储（确保目录存在）
+export const initStorage = async () => {
+  const invoke = await getTauriInvoke();
+  if (invoke) {
+    console.log('Tauri file storage initialized');
+  } else {
+    console.log('Using localStorage fallback');
   }
 };
 

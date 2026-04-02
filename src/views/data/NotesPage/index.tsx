@@ -15,23 +15,31 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
   const editorRef = useRef<HTMLDivElement>(null);
+  const isFirstLoad = useRef(true); // 用于追踪是否是首次加载
 
   useEffect(() => {
     loadNotes();
   }, []);
 
-  // 当选中笔记变化时，确保光标在末尾
+  // 当选中笔记变化时，只在首次加载时将光标移到末尾
   useEffect(() => {
-    if (selectedNote && editorRef.current) {
-      // 将光标移动到内容末尾
-      const range = document.createRange();
-      const selection = window.getSelection();
-      if (editorRef.current.lastChild) {
-        range.selectNodeContents(editorRef.current);
-        range.collapse(false); // 移到末尾
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-      }
+    if (selectedNote && editorRef.current && isFirstLoad.current) {
+      isFirstLoad.current = false;
+      // 延迟执行，确保 DOM 已渲染
+      setTimeout(() => {
+        const range = document.createRange();
+        const selection = window.getSelection();
+        if (editorRef.current) {
+          range.selectNodeContents(editorRef.current);
+          range.collapse(false); // 移到末尾
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
+      }, 0);
+    }
+    // 当切换到另一个笔记时，重置 isFirstLoad
+    if (selectedId) {
+      isFirstLoad.current = true;
     }
   }, [selectedId]);
 
@@ -108,11 +116,13 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
   };
 
   // 处理内容变化（包括文本和图片）
+  // 使用防抖避免频繁保存，且不重新加载列表（避免光标丢失）
   const handleContentChange = async () => {
     if (selectedNote && editorRef.current) {
       const content = editorRef.current.innerHTML;
       await updateNote(selectedNote.id, { content });
-      loadNotes();
+      // 只更新本地笔记数据，不重新渲染编辑器
+      setNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, content, updateTime: new Date().toISOString() } : n));
     }
   };
 
@@ -221,7 +231,7 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
         </div>
 
         {/* 右侧详情/编辑区 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, width: '100%' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {selectedNote ? (
             <>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -244,6 +254,7 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
                   lineHeight: 1.8,
                   fontSize: 14,
                   width: '100%',
+                  maxWidth: '100%',
                   boxSizing: 'border-box'
                 }}
                 dangerouslySetInnerHTML={{ __html: selectedNote.content || '' }}
@@ -251,7 +262,7 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
               />
             </>
           ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Empty description="选择或创建一个笔记" />
             </div>
           )}

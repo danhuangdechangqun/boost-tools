@@ -15,13 +15,57 @@ const PROVIDER_PRESETS = [
 // 键盘按键映射
 const KEY_MAP: Record<string, string> = {
   'Control': 'Ctrl',
+  'Ctrl': 'Ctrl',
   'Meta': 'Cmd',
+  'Command': 'Cmd',
   'Shift': 'Shift',
   'Alt': 'Alt',
   'ArrowUp': 'Up',
   'ArrowDown': 'Down',
   'ArrowLeft': 'Left',
   'ArrowRight': 'Right',
+};
+
+// 修饰键列表（使用统一的键名）
+const MODIFIER_KEYS = ['Ctrl', 'Cmd', 'Shift', 'Alt'];
+
+// Tauri invoke 辅助函数
+let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<any>) | null = null;
+
+const getTauriInvoke = async () => {
+  if (!tauriInvoke) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      tauriInvoke = invoke;
+    } catch {
+      // 非 Tauri 环境
+    }
+  }
+  return tauriInvoke;
+};
+
+// 暂停全局快捷键
+const pauseGlobalShortcut = async () => {
+  const invoke = await getTauriInvoke();
+  if (invoke) {
+    try {
+      await invoke('pause_global_shortcut');
+    } catch (e) {
+      console.warn('暂停快捷键失败:', e);
+    }
+  }
+};
+
+// 恢复全局快捷键
+const resumeGlobalShortcut = async () => {
+  const invoke = await getTauriInvoke();
+  if (invoke) {
+    try {
+      await invoke('resume_global_shortcut');
+    } catch (e) {
+      console.warn('恢复快捷键失败:', e);
+    }
+  }
 };
 
 const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
@@ -141,7 +185,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
     setTesting(false);
   };
 
-  const startRecording = () => {
+  const startRecording = async () => {
+    // 暂停全局快捷键，避免录制时触发执行
+    await pauseGlobalShortcut();
     setRecordingKey(true);
     setRecordedKeys([]);
     if (keyInputRef.current) {
@@ -149,8 +195,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
     }
   };
 
-  const stopRecording = () => {
+  const stopRecording = async () => {
     setRecordingKey(false);
+    // 恢复全局快捷键
+    await resumeGlobalShortcut();
     if (recordedKeys.length > 0) {
       const shortcutStr = recordedKeys.join('+');
       form.setFieldsValue({ shortcut: { key: shortcutStr } });
@@ -162,22 +210,26 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
     e.preventDefault();
     e.stopPropagation();
 
-    const mainKey = KEY_MAP[e.key] || e.key.toUpperCase();
+    const mappedKey = KEY_MAP[e.key] || e.key.toUpperCase();
+    // 使用映射后的键名判断是否是修饰键
+    const isModifier = MODIFIER_KEYS.includes(mappedKey);
 
     // 如果是普通字母键（不是修饰键），则完成录制
-    if (!['CONTROL', 'META', 'SHIFT', 'ALT'].includes(e.key.toUpperCase())) {
+    if (!isModifier) {
       // 根据当前按下的修饰键组合最终快捷键
       const keys = new Set<string>();
       if (e.ctrlKey) keys.add('Ctrl');
       if (e.metaKey) keys.add('Cmd');
       if (e.shiftKey) keys.add('Shift');
       if (e.altKey) keys.add('Alt');
-      keys.add(mainKey);
+      keys.add(mappedKey);
 
       const finalKeys = Array.from(keys);
       setRecordedKeys(finalKeys);
       setRecordingKey(false);
       form.setFieldsValue({ shortcut: { key: finalKeys.join('+') } });
+      // 恢复全局快捷键
+      resumeGlobalShortcut();
     }
     // 修饰键按下时不做任何更新，避免重复触发
   };

@@ -17,9 +17,36 @@ const presets = [
   { label: '工作日9点', value: '0 0 9 ? * MON-FRI' },
 ];
 
-// 解析单个字段值（支持数字、*、?）
+// 解析单个字段值（支持数字、*、?、*/n、n/m、n-m 格式）
 const parseField = (field: string, current: number): boolean => {
   if (field === '*' || field === '?') return true;
+
+  // 支持 */n 格式（每隔n）
+  if (field.startsWith('*/')) {
+    const step = parseInt(field.slice(2));
+    if (isNaN(step) || step === 0) return false;
+    return current % step === 0;
+  }
+
+  // 支持 n/m 格式（从n开始，每隔m）
+  if (field.includes('/')) {
+    const [start, step] = field.split('/');
+    const startNum = parseInt(start);
+    const stepNum = parseInt(step);
+    if (isNaN(startNum) || isNaN(stepNum) || stepNum === 0) return false;
+    return current >= startNum && (current - startNum) % stepNum === 0;
+  }
+
+  // 支持 n-m 格式（范围）
+  if (field.includes('-')) {
+    const [start, end] = field.split('-');
+    const startNum = parseInt(start);
+    const endNum = parseInt(end);
+    if (isNaN(startNum) || isNaN(endNum)) return false;
+    return current >= startNum && current <= endNum;
+  }
+
+  // 单个数字
   const num = parseInt(field);
   if (isNaN(num)) return false;
   return num === current;

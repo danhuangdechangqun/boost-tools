@@ -1,13 +1,30 @@
 //! 效能助推器 - Tauri 应用入口
 
 mod llm;
+mod storage;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
+// 全局快捷键暂停标志
+static SHORTCUT_PAUSED: AtomicBool = AtomicBool::new(false);
+
+// 暂停全局快捷键
+#[tauri::command]
+fn pause_global_shortcut() {
+    SHORTCUT_PAUSED.store(true, Ordering::SeqCst);
+}
+
+// 恢复全局快捷键
+#[tauri::command]
+fn resume_global_shortcut() {
+    SHORTCUT_PAUSED.store(false, Ordering::SeqCst);
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,6 +33,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             llm::test_llm_connection,
             llm::call_llm,
+            storage::read_json_file,
+            storage::write_json_file,
+            storage::delete_json_file,
+            pause_global_shortcut,
+            resume_global_shortcut,
         ])
         .setup(|app| {
             // 日志插件（仅调试模式）
@@ -77,6 +99,11 @@ pub fn run() {
             let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyB);
             let app_handle = app.handle().clone();
             app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
+                // 检查是否已暂停
+                if SHORTCUT_PAUSED.load(Ordering::SeqCst) {
+                    return; // 暂停时不执行快捷键动作
+                }
+
                 if event.state == ShortcutState::Pressed {
                     if let Some(window) = app_handle.get_webview_window("main") {
                         if window.is_visible().unwrap_or(false) {
