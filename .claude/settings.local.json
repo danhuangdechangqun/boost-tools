@@ -48,7 +48,14 @@
       "Bash(npx tauri:*)",
       "Bash(taskkill:*)",
       "Bash(powershell:*)",
-      "Bash(tasklist)"
+      "Bash(tasklist)",
+      "Bash(npm -v)",
+      "Bash(pnpm -v)",
+      "Bash(yarn -v)",
+      "Bash(git --version)",
+      "Bash(cargo tauri:*)",
+      "Bash(npm list:*)",
+      "Bash(reg query:*)"
     ]
   }
 }

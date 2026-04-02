@@ -161,8 +161,37 @@ const getNextRunTimes = (expression: string, count: number = 5): Date[] => {
         current.setSeconds(0);
       }
     } else {
-      // 全匹配，但已添加结果，跳到下一秒继续找下一个
-      current.setSeconds(s + 1);
+      // 全匹配，已添加结果，跳到下一个可能的时间点
+      // 根据表达式的固定字段决定跳跃步长
+      if (day !== '*' && day !== '?') {
+        // 指定了具体日期，跳到下一天（避免同一日期重复匹配）
+        current.setDate(d + 1);
+      } else if (week !== '*' && week !== '?') {
+        // 指定了周，跳到下一天
+        current.setDate(d + 1);
+      } else if (hour !== '*' && hour !== '?') {
+        // 指定了具体小时，跳到下一小时
+        current.setHours(h + 1);
+      } else if (minute !== '*' && minute !== '?') {
+        // 指定了具体分钟，跳到下一分钟
+        current.setMinutes(m + 1);
+      } else {
+        // 只有秒是固定的或全是通配符，跳到下一秒
+        current.setSeconds(s + 1);
+      }
+      // 重置更低精度的时间单位
+      if (day !== '*' && day !== '?' || week !== '*' && week !== '?') {
+        current.setHours(0);
+        current.setMinutes(0);
+      } else if (hour !== '*' && hour !== '?') {
+        current.setMinutes(0);
+      }
+      // 设置秒为目标值或0
+      if (second !== '*' && second !== '?') {
+        current.setSeconds(parseInt(second));
+      } else {
+        current.setSeconds(0);
+      }
     }
   }
 
