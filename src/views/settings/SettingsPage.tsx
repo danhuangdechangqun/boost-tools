@@ -88,7 +88,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
           apiUrl: config.llm?.apiUrl || '',
           apiKey: config.llm?.apiKey || '',
           model: config.llm?.model || '',
-          format: config.llm?.format || 'claude'
+          format: config.llm?.format || 'openai'
         },
         shortcut: {
           key: config.shortcut?.key || 'Ctrl+Shift+B',
@@ -112,7 +112,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
         apiUrl: values.llm?.apiUrl || '',
         apiKey: values.llm?.apiKey || '',
         model: values.llm?.model || '',
-        format: values.llm?.format || 'claude'
+        format: values.llm?.format || 'openai'
       },
       shortcut: {
         key: values.shortcut?.key || 'Ctrl+Shift+B',
@@ -159,7 +159,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
           apiUrl: apiUrl,
           apiKey: apiKey,
           model: model,
-          format: values.llm?.format || 'claude'
+          format: values.llm?.format || 'openai'
         },
         shortcut: {
           key: values.shortcut?.key || 'Ctrl+Shift+B',
@@ -240,14 +240,15 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 12 }}>
         <Button icon={<ArrowLeft size={16} />} onClick={onBack}>返回</Button>
         <h3 style={{ flex: 1, margin: 0 }}>设置</h3>
       </div>
 
-      <div style={{ flex: 1, padding: 24, overflow: 'auto', maxWidth: 600 }}>
-        <Form form={form} layout="vertical" onFinish={handleSave}>
+      <div style={{ flex: 1, padding: 24, overflow: 'auto', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: 600 }}>
+          <Form form={form} layout="vertical" onFinish={handleSave}>
           <Card title="大模型API配置" style={{ marginBottom: 16 }}>
             <Form.Item label="快速选择供应商">
               <Select
@@ -270,11 +271,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
             <Form.Item name={['llm', 'model']} label="模型名称" rules={[{ required: true, message: '请输入模型名称' }]}>
               <Input placeholder="如: claude-sonnet-4-6, glm-5" />
             </Form.Item>
-            <Form.Item name={['llm', 'format']} label="API格式" initialValue="claude">
-              <Select>
-                <Select.Option value="claude">Anthropic Messages (原生)</Select.Option>
-                <Select.Option value="openai">OpenAI Chat Completions</Select.Option>
-              </Select>
+            <Form.Item name={['llm', 'format']} initialValue="openai" hidden>
+              <Input />
             </Form.Item>
             <Button icon={<Server size={14} />} onClick={testConnection} loading={testing} style={{ marginRight: 8 }}>测试连接</Button>
             <span style={{ fontSize: 12, color: '#6B7280' }}>测试前会自动保存配置</span>
@@ -344,6 +342,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
 
           <Button type="primary" htmlType="submit" icon={<Save size={14} />} size="large">保存设置</Button>
         </Form>
+        </div>
       </div>
     </div>
   );

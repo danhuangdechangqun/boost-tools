@@ -288,7 +288,7 @@ const CronPage: React.FC<CronPageProps> = ({ onBack }) => {
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 12 }}>
         <Button icon={<ArrowLeft size={16} />} onClick={onBack}>返回</Button>
         <h3 style={{ flex: 1, margin: 0 }}>Cron表达式生成器</h3>
@@ -404,7 +404,7 @@ const CronPage: React.FC<CronPageProps> = ({ onBack }) => {
             <div style={{ fontFamily: 'monospace', fontSize: 18, marginBottom: 8 }}>{expression}</div>
             <div style={{ color: '#6B7280' }}>{getDescription()}</div>
           </div>
-          <Button type="primary" icon={<Copy size={16} />} onClick={() => { navigator.clipboard.writeText(expression); message.success('已复制'); }}>生成Cron表达式</Button>
+          <Button type="primary" icon={<Copy size={16} />} onClick={() => { navigator.clipboard.writeText(expression); message.success('已复制'); }}>复制</Button>
         </div>
       </div>
     </div>

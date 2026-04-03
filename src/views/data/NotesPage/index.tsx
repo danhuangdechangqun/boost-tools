@@ -15,31 +15,31 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
   const editorRef = useRef<HTMLDivElement>(null);
-  const isFirstLoad = useRef(true); // 用于追踪是否是首次加载
+  const currentContentRef = useRef<string>(''); // 用ref保存当前编辑内容，避免状态更新导致重新渲染
 
   useEffect(() => {
     loadNotes();
   }, []);
 
-  // 当选中笔记变化时，只在首次加载时将光标移到末尾
+  // 当选中笔记变化时，手动设置编辑器内容（只在切换笔记时执行）
   useEffect(() => {
-    if (selectedNote && editorRef.current && isFirstLoad.current) {
-      isFirstLoad.current = false;
-      // 延迟执行，确保 DOM 已渲染
+    if (selectedNote && editorRef.current) {
+      // 只有当内容与当前编辑器不同时才更新（避免输入时被覆盖）
+      if (editorRef.current.innerHTML !== selectedNote.content) {
+        editorRef.current.innerHTML = selectedNote.content || '';
+        currentContentRef.current = selectedNote.content || '';
+      }
+      // 光标移到末尾
       setTimeout(() => {
         const range = document.createRange();
         const selection = window.getSelection();
-        if (editorRef.current) {
+        if (editorRef.current && editorRef.current.innerHTML !== currentContentRef.current) {
           range.selectNodeContents(editorRef.current);
-          range.collapse(false); // 移到末尾
+          range.collapse(false);
           selection?.removeAllRanges();
           selection?.addRange(range);
         }
       }, 0);
-    }
-    // 当切换到另一个笔记时，重置 isFirstLoad
-    if (selectedId) {
-      isFirstLoad.current = true;
     }
   }, [selectedId]);
 
@@ -116,12 +116,13 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
   };
 
   // 处理内容变化（包括文本和图片）
-  // 使用防抖避免频繁保存，且不重新加载列表（避免光标丢失）
+  // 使用 ref 保存当前内容，避免状态更新导致光标丢失
   const handleContentChange = async () => {
     if (selectedNote && editorRef.current) {
       const content = editorRef.current.innerHTML;
+      currentContentRef.current = content; // 更新 ref
       await updateNote(selectedNote.id, { content });
-      // 只更新本地笔记数据，不重新渲染编辑器
+      // 更新 notes 状态但不触发编辑器重新渲染（useEffect会检查内容是否相同）
       setNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, content, updateTime: new Date().toISOString() } : n));
     }
   };
@@ -194,7 +195,7 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
   );
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 12 }}>
         <Button icon={<ArrowLeft size={16} />} onClick={onBack}>返回</Button>
         <h3 style={{ flex: 1, margin: 0 }}>笔记</h3>
@@ -257,7 +258,6 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
                   maxWidth: '100%',
                   boxSizing: 'border-box'
                 }}
-                dangerouslySetInnerHTML={{ __html: selectedNote.content || '' }}
                 data-placeholder="开始输入...支持粘贴图片"
               />
             </>

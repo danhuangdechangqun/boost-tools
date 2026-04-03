@@ -59,12 +59,14 @@ const MainLayout: React.FC = () => {
         }}
         onSettingsClick={() => setCurrentPage('settings')}
       />
-      <ContentArea
-        currentGroup={currentGroup}
-        currentPage={currentPage}
-        onPageChange={setCurrentPage}
-        onBack={() => setCurrentPage(null)}
-      />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <ContentArea
+          currentGroup={currentGroup}
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+          onBack={() => setCurrentPage(null)}
+        />
+      </div>
     </div>
   );
 };

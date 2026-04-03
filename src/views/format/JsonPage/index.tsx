@@ -36,7 +36,7 @@ const JsonPage: React.FC<JsonPageProps> = ({ onBack }) => {
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 12 }}>
         <Button icon={<ArrowLeft size={16} />} onClick={onBack}>返回</Button>
         <h3 style={{ flex: 1, margin: 0 }}>JSON美化</h3>

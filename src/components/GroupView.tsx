@@ -61,7 +61,7 @@ const GroupView: React.FC<GroupViewProps> = ({ group, onPageChange }) => {
   const groupName = groupNames[group] || group;
 
   return (
-    <div style={{ padding: 24, height: '100%', overflow: 'auto', background: '#FFFFFF' }}>
+    <div style={{ padding: 24, width: '100%', height: '100%', overflow: 'auto', background: '#FFFFFF' }}>
       <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16, color: '#1F2937' }}>
         {groupName}
       </h2>

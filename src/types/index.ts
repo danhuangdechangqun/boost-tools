@@ -5,7 +5,7 @@ export interface AppConfig {
     apiUrl: string;
     apiKey: string;
     model: string;
-    format: 'openai' | 'claude' | 'anthropic';
+    format: 'openai';
   };
   shortcut: {
     key: string;

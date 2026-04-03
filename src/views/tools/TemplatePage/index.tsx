@@ -8,8 +8,6 @@ interface TemplatePageProps {
 
 const modes = [
   { value: 'sql', label: 'SQL IN格式' },
-  { value: 'vertical', label: '竖向变横向' },
-  { value: 'horizontal', label: '横向变竖向' },
   { value: 'prefix', label: '添加前缀/后缀' },
   { value: 'number', label: '编号添加' },
 ];
@@ -29,12 +27,6 @@ const TemplatePage: React.FC<TemplatePageProps> = ({ onBack }) => {
       case 'sql':
         result = lines.map(l => `'${l.trim()}'`).join(',');
         break;
-      case 'vertical':
-        result = lines.join('\t');
-        break;
-      case 'horizontal':
-        result = lines.join('\n');
-        break;
       case 'prefix':
         result = lines.map(l => `${prefix}${l.trim()}${suffix}`).join('\n');
         break;
@@ -47,7 +39,7 @@ const TemplatePage: React.FC<TemplatePageProps> = ({ onBack }) => {
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 12 }}>
         <Button icon={<ArrowLeft size={16} />} onClick={onBack}>返回</Button>
         <h3 style={{ flex: 1, margin: 0 }}>数据填充模板</h3>

@@ -55,7 +55,9 @@
       "Bash(git --version)",
       "Bash(cargo tauri:*)",
       "Bash(npm list:*)",
-      "Bash(reg query:*)"
+      "Bash(reg query:*)",
+      "Read(//d/code/AI/boost-tools/$APPDATA/**)",
+      "Read(//d/code/AI/boost-tools/**)"
     ]
   }
 }

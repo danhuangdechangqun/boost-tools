@@ -53,7 +53,7 @@ export const callLlm = async (prompt: string, options?: { maxTokens?: number }):
           apiUrl: cachedConfig.apiUrl,
           apiKey: cachedConfig.apiKey,
           model: cachedConfig.model,
-          format: cachedConfig.format || 'anthropic'
+          format: cachedConfig.format || 'openai'
         },
         prompt: prompt,
         maxTokens: options?.maxTokens || 4096
@@ -192,7 +192,7 @@ export const testLlmConnection = async (): Promise<LLMResponse> => {
           apiUrl: cachedConfig.apiUrl,
           apiKey: cachedConfig.apiKey,
           model: cachedConfig.model,
-          format: cachedConfig.format || 'anthropic'
+          format: cachedConfig.format || 'openai'
         }
       });
       console.log('Tauri result:', result);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Input, Card, Modal, Form, message, Spin, Tag } from 'antd';
-import { ArrowLeft, Plus, Trash2, Check, Calendar, GripVertical } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Check, Calendar, GripVertical, RotateCcw, History } from 'lucide-react';
 import dayjs from 'dayjs';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import { getTodos, addTodo, updateTodo, deleteTodo, callLlm, TodoItem, shouldGenerateWeeklyReport } from '@/services/api';
@@ -15,17 +15,23 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
+  const [completedDetailModalOpen, setCompletedDetailModalOpen] = useState(false);
+  const [viewingCompletedTodo, setViewingCompletedTodo] = useState<TodoItem | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [reportContent, setReportContent] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
   const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
   const [isWeeklyReportTime, setIsWeeklyReportTime] = useState(false);
 
   // 自动迁移：将过期的"tomorrow"任务迁移到"today"
   const autoMigrateTodos = async (todoList: TodoItem[]) => {
     const today = dayjs().format('YYYY-MM-DD');
     const needsMigration = todoList.filter(t =>
-      t.group === 'tomorrow' && t.status === 'pending' && t.dueDate && t.dueDate <= today
+      t.group === 'tomorrow' && t.status === 'pending' && t.dueDate && t.dueDate < today
     );
 
     if (needsMigration.length > 0) {
@@ -91,6 +97,52 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
     loadTodos();
   };
 
+  const handleDeleteCompleted = async () => {
+    const completedIds = completedTodos.map(t => t.id);
+    for (const id of completedIds) {
+      await deleteTodo(id);
+    }
+    message.success(`已删除${completedIds.length}个已完成任务`);
+    loadTodos();
+  };
+
+  const handleDoubleClick = (todo: TodoItem) => {
+    setEditingTodo(todo);
+    editForm.setFieldsValue({
+      title: todo.title,
+      description: todo.description || '',
+      group: todo.group,
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleCompletedTagDoubleClick = (todo: TodoItem) => {
+    setViewingCompletedTodo(todo);
+    setCompletedDetailModalOpen(true);
+  };
+
+  const handleRestoreToToday = async (todo: TodoItem) => {
+    await updateTodo(todo.id, { status: 'pending', group: 'today' });
+    message.success('已放回今日待办');
+    setCompletedDetailModalOpen(false);
+    setViewingCompletedTodo(null);
+    loadTodos();
+  };
+
+  const handleEditSave = async (values: any) => {
+    if (!editingTodo) return;
+    await updateTodo(editingTodo.id, {
+      title: values.title,
+      description: values.description,
+      group: values.group,
+    });
+    message.success('修改成功');
+    setEditModalOpen(false);
+    setEditingTodo(null);
+    editForm.resetFields();
+    loadTodos();
+  };
+
   const handleDragEnd = async (result: DropResult) => {
     const { destination, source, draggableId } = result;
 
@@ -113,13 +165,45 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
     setReportLoading(true);
     try {
       const completedTodos = todos.filter(t => t.status === 'completed' && t.completeTime);
-      if (completedTodos.length === 0) {
-        message.warning('没有已完成的任务');
-        setReportContent('本周暂无已完成任务。');
+      const nextWeekTodos = todos.filter(t => t.group === 'nextWeek' && t.status === 'pending');
+
+      if (completedTodos.length === 0 && nextWeekTodos.length === 0) {
+        message.warning('没有已完成的任务和下周计划');
+        setReportContent('本周暂无已完成任务，也无下周计划。');
       } else {
-        const prompt = `请根据以下本周已完成的任务，生成一份周报摘要：
-${completedTodos.map(t => `- [${t.completeTime?.split('T')[0]}] ${t.title}`).join('\n')}
-要求：简洁、突出成果、可复制使用，Markdown格式。`;
+        const completedSection = completedTodos.length > 0
+          ? completedTodos.map(t => `${t.title}${t.description ? `：${t.description}` : ''}`).join('\n')
+          : '无';
+
+        const nextWeekSection = nextWeekTodos.length > 0
+          ? nextWeekTodos.map(t => `${t.title}${t.description ? `：${t.description}` : ''}`).join('\n')
+          : '无';
+
+        const prompt = `请根据以下任务信息生成周报，严格按照指定格式输出：
+
+本周已完成任务：
+${completedSection}
+
+下周计划任务：
+${nextWeekSection}
+
+输出格式要求（必须严格遵守）：
+一、本周主要工作
+    1、任务内容描述
+    2、任务内容描述
+    ...
+二、下周计划工作
+    1、计划内容描述
+    ...
+
+要求：
+1. 直接输出纯文本，不要Markdown格式，不要加粗符号
+2. 每项任务单独一行，使用"    1、"这种编号格式（前面4个空格缩进）
+3. 任务描述要简明扼要，直接描述做了什么或计划做什么
+4. 如果本周无已完成任务，输出"一、本周主要工作\n    无"
+5. 如果下周无计划，输出"二、下周计划工作\n    无"
+6. 不要添加任何额外内容（如问题/风险等），只输出以上两部分`;
+
         const content = await callLlm(prompt);
         setReportContent(content);
       }
@@ -131,6 +215,14 @@ ${completedTodos.map(t => `- [${t.completeTime?.split('T')[0]}] ${t.title}`).joi
 
   const getGroupTodos = (group: TodoGroup) => todos.filter(t => t.group === group && t.status === 'pending');
   const completedTodos = todos.filter(t => t.status === 'completed');
+
+  // 按日期分组已完成任务（用于完成历史）
+  const groupedCompletedHistory = completedTodos.reduce((acc, todo) => {
+    const date = todo.completeTime ? dayjs(todo.completeTime).format('YYYY-MM-DD') : '未知日期';
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(todo);
+    return acc;
+  }, {} as Record<string, TodoItem[]>);
 
   const renderTodoCard = (item: TodoItem) => (
     <Draggable key={item.id} draggableId={item.id} index={0}>
@@ -149,24 +241,21 @@ ${completedTodos.map(t => `- [${t.completeTime?.split('T')[0]}] ${t.title}`).joi
               border: '1px solid #E5E7EB',
               background: snapshot.isDragging ? '#EFF6FF' : '#FFFFFF',
               boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.1)' : 'none',
+              cursor: 'pointer',
             }}
             styles={{ body: { padding: 12 } }}
+            onDoubleClick={() => handleDoubleClick(item)}
           >
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <div {...provided.dragHandleProps} style={{ cursor: 'grab', color: '#9CA3AF', marginTop: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div {...provided.dragHandleProps} style={{ cursor: 'grab', color: '#9CA3AF' }}>
                 <GripVertical size={16} />
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                {item.description && (
-                  <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {item.description}
-                  </div>
-                )}
+              <div style={{ flex: 1, minWidth: 0, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {item.title}
               </div>
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                <Button size="small" icon={<Check size={14} />} onClick={() => handleComplete(item.id)} title="标记完成" />
-                <Button size="small" danger icon={<Trash2 size={14} />} onClick={() => handleDelete(item.id)} title="删除" />
+                <Button size="small" icon={<Check size={14} />} onClick={(e) => { e.stopPropagation(); handleComplete(item.id); }} title="标记完成" />
+                <Button size="small" danger icon={<Trash2 size={14} />} onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }} title="删除" />
               </div>
             </div>
           </Card>
@@ -207,10 +296,11 @@ ${completedTodos.map(t => `- [${t.completeTime?.split('T')[0]}] ${t.title}`).joi
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 12 }}>
         <Button icon={<ArrowLeft size={16} />} onClick={onBack}>返回</Button>
         <h3 style={{ flex: 1, margin: 0 }}>TodoList周报</h3>
+        <Button icon={<History size={16} />} onClick={() => setHistoryModalOpen(true)}>完成历史</Button>
         <Button
           type={isWeeklyReportTime ? 'primary' : 'default'}
           icon={<Calendar size={16} />}
@@ -237,10 +327,20 @@ ${completedTodos.map(t => `- [${t.completeTime?.split('T')[0]}] ${t.title}`).joi
 
         {completedTodos.length > 0 && (
           <div style={{ marginTop: 16, padding: 12, background: '#F0FDF4', borderRadius: 8 }}>
-            <h4 style={{ marginBottom: 12, color: '#16A34A' }}>本周已完成 ({completedTodos.length})</h4>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <h4 style={{ margin: 0, color: '#16A34A' }}>本周已完成 ({completedTodos.length})</h4>
+              <Button size="small" danger icon={<Trash2 size={14} />} onClick={handleDeleteCompleted}>清空已完成</Button>
+            </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {completedTodos.map(item => (
-                <Tag key={item.id} color="green" style={{ margin: 0 }}>{item.title}</Tag>
+                <Tag
+                  key={item.id}
+                  color="green"
+                  style={{ margin: 0, cursor: 'pointer' }}
+                  onDoubleClick={() => handleCompletedTagDoubleClick(item)}
+                >
+                  {item.title}
+                </Tag>
               ))}
             </div>
           </div>
@@ -276,6 +376,87 @@ ${completedTodos.map(t => `- [${t.completeTime?.split('T')[0]}] ${t.title}`).joi
         width={600}
       >
         {reportLoading ? <Spin /> : <pre style={{ whiteSpace: 'pre-wrap', background: '#F9FAFB', padding: 16, borderRadius: 8, maxHeight: 400, overflow: 'auto' }}>{reportContent}</pre>}
+      </Modal>
+
+      <Modal title="编辑任务" open={editModalOpen} onCancel={() => { setEditModalOpen(false); setEditingTodo(null); }} onOk={() => editForm.submit()}>
+        <Form form={editForm} layout="vertical" onFinish={handleEditSave}>
+          <Form.Item name="title" label="任务标题" rules={[{ required: true }]}>
+            <Input placeholder="输入任务标题" />
+          </Form.Item>
+          <Form.Item name="description" label="任务描述">
+            <Input.TextArea rows={3} placeholder="输入任务描述（可选）" />
+          </Form.Item>
+          <Form.Item name="group" label="分组">
+            <select style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D9D9D9' }}>
+              <option value="today">今日待办</option>
+              <option value="tomorrow">明日待办</option>
+              <option value="nextWeek">下周计划</option>
+            </select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="已完成任务详情"
+        open={completedDetailModalOpen}
+        onCancel={() => { setCompletedDetailModalOpen(false); setViewingCompletedTodo(null); }}
+        footer={[
+          <Button key="close" onClick={() => { setCompletedDetailModalOpen(false); setViewingCompletedTodo(null); }}>关闭</Button>,
+          <Button key="restore" type="primary" icon={<RotateCcw size={14} />} onClick={() => viewingCompletedTodo && handleRestoreToToday(viewingCompletedTodo)}>放回今日待办</Button>
+        ]}
+        width={400}
+      >
+        {viewingCompletedTodo && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontWeight: 500, color: '#6B7280' }}>任务标题</label>
+              <div style={{ marginTop: 4 }}>{viewingCompletedTodo.title}</div>
+            </div>
+            {viewingCompletedTodo.description && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontWeight: 500, color: '#6B7280' }}>任务描述</label>
+                <div style={{ marginTop: 4 }}>{viewingCompletedTodo.description}</div>
+              </div>
+            )}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontWeight: 500, color: '#6B7280' }}>完成时间</label>
+              <div style={{ marginTop: 4 }}>{viewingCompletedTodo.completeTime ? dayjs(viewingCompletedTodo.completeTime).format('YYYY-MM-DD HH:mm') : '未知'}</div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title="完成历史"
+        open={historyModalOpen}
+        onCancel={() => setHistoryModalOpen(false)}
+        footer={<Button onClick={() => setHistoryModalOpen(false)}>关闭</Button>}
+        width={600}
+      >
+        <div style={{ maxHeight: 500, overflow: 'auto' }}>
+          {Object.entries(groupedCompletedHistory).map(([date, items]) => (
+            <div key={date} style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 500, color: '#16A34A', marginBottom: 8, borderBottom: '1px solid #E5E7EB', paddingBottom: 4 }}>
+                {date} ({items.length}个任务)
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {items.map(item => (
+                  <Tag
+                    key={item.id}
+                    color="green"
+                    style={{ margin: 0, cursor: 'pointer' }}
+                    onDoubleClick={() => { setHistoryModalOpen(false); handleCompletedTagDoubleClick(item); }}
+                  >
+                    {item.title}
+                  </Tag>
+                ))}
+              </div>
+            </div>
+          ))}
+          {Object.keys(groupedCompletedHistory).length === 0 && (
+            <div style={{ textAlign: 'center', color: '#9CA3AF', padding: 40 }}>暂无完成历史记录</div>
+          )}
+        </div>
       </Modal>
     </div>
   );
