@@ -24,3 +24,7 @@ Thumbs.db
 
 # 你的本地数据文件夹
 data/
+
+# 文档
+docs/
+prd/
