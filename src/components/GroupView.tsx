@@ -5,7 +5,7 @@ import {
   Calculator, Clock, Regex,
   FileJson, FileCode, Diff,
   Fingerprint, Hash, FileSpreadsheet,
-  StickyNote, KeyRound
+  StickyNote, KeyRound, MessageCircleQuestion, ClipboardList, Database
 } from 'lucide-react';
 
 interface GroupViewProps {
@@ -22,6 +22,9 @@ interface Feature {
 
 const groupFeatures: Record<string, Feature[]> = {
   ai: [
+    { id: 'knowledge-base', icon: Database, name: '知识库+RAG', desc: '导入文档建立知识库，AI智能问答' },
+    { id: 'feedback-analysis', icon: MessageCircleQuestion, name: '用户反馈分析', desc: 'AI分类+需求转化+优先级建议' },
+    { id: 'ticket-analysis', icon: ClipboardList, name: '工单数据分析', desc: '数据清洗+统计+根因分析' },
     { id: 'todo', icon: ListChecks, name: 'TodoList周报', desc: '待办任务管理 + 自动生成周报' },
     { id: 'file-read', icon: FileText, name: '文件解读', desc: '上传Word/PDF，AI解读重点' },
     { id: 'fake-data', icon: Table2, name: '假数据生成', desc: 'AI生成JSON或表格格式数据' },

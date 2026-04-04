@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button, Input, Card, Form, message, Spin, Select, Switch } from 'antd';
-import { ArrowLeft, Save, Server } from 'lucide-react';
+import { ArrowLeft, Save, Server, FileText } from 'lucide-react';
 import { getConfig, setConfig, testLlmConnection, AppConfig } from '@/services/api';
 
 interface SettingsPageProps {
   onBack: () => void;
+  onNavigate?: (page: string) => void;
 }
 
 // 预设供应商配置
@@ -68,7 +69,7 @@ const resumeGlobalShortcut = async () => {
   }
 };
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
   const [recordingKey, setRecordingKey] = useState(false);
@@ -338,6 +339,24 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
                 <Select.Option value="text">纯文本</Select.Option>
               </Select>
             </Form.Item>
+          </Card>
+
+          <Card
+            title="提示词管理"
+            style={{ marginBottom: 16, cursor: 'pointer' }}
+            onClick={() => onNavigate?.('prompt-manager')}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ margin: 0, color: '#6B7280', fontSize: 14 }}>
+                  自定义各功能的AI提示词模板，实时生效
+                </p>
+                <p style={{ margin: '8px 0 0', color: '#9CA3AF', fontSize: 12 }}>
+                  包含：意图识别、反馈分析、数据清洗、RAG问答等
+                </p>
+              </div>
+              <FileText size={24} color="#3B82F6" />
+            </div>
           </Card>
 
           <Button type="primary" htmlType="submit" icon={<Save size={14} />} size="large">保存设置</Button>

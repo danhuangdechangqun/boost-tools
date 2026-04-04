@@ -4,6 +4,10 @@ import TodoPage from '../../views/ai/TodoPage';
 import FileReadPage from '../../views/ai/FileReadPage';
 import FakeDataPage from '../../views/ai/FakeDataPage';
 import PromptsPage from '../../views/ai/PromptsPage';
+import FeedbackAnalysisPage from '../../views/ai/FeedbackAnalysisPage';
+import TicketAnalysisPage from '../../views/ai/TicketAnalysisPage';
+import KnowledgeBasePage from '../../views/ai/KnowledgeBasePage';
+import PromptManagerPage from '../../views/settings/PromptManagerPage';
 import AviatorPage from '../../views/expression/AviatorPage';
 import CronPage from '../../views/expression/CronPage';
 import RegexPage from '../../views/expression/RegexPage';
@@ -26,10 +30,14 @@ interface ContentAreaProps {
 
 const pageComponents: Record<string, React.FC<{ onBack: () => void }>> = {
   'settings': SettingsPage,
+  'prompt-manager': PromptManagerPage,
   'todo': TodoPage,
   'file-read': FileReadPage,
   'fake-data': FakeDataPage,
   'prompts': PromptsPage,
+  'feedback-analysis': FeedbackAnalysisPage,
+  'ticket-analysis': TicketAnalysisPage,
+  'knowledge-base': KnowledgeBasePage,
   'aviator': AviatorPage,
   'cron': CronPage,
   'regex': RegexPage,
@@ -46,6 +54,10 @@ const pageComponents: Record<string, React.FC<{ onBack: () => void }>> = {
 const ContentArea: React.FC<ContentAreaProps> = ({ currentGroup, currentPage, onPageChange, onBack }) => {
   if (currentPage && pageComponents[currentPage]) {
     const PageComponent = pageComponents[currentPage];
+    // SettingsPage需要额外的onNavigate属性
+    if (currentPage === 'settings') {
+      return <PageComponent onBack={onBack} onNavigate={onPageChange} />;
+    }
     return <PageComponent onBack={onBack} />;
   }
 

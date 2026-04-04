@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import ContentArea from './ContentArea';
+import SmartAssistant from '../SmartAssistant';
 import { initStorage, initLLM } from '@/services/api';
 
 const MainLayout: React.FC = () => {
   const [currentGroup, setCurrentGroup] = useState('ai');
   const [currentPage, setCurrentPage] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -58,6 +60,7 @@ const MainLayout: React.FC = () => {
           setCurrentPage(null);
         }}
         onSettingsClick={() => setCurrentPage('settings')}
+        onAssistantClick={() => setAssistantOpen(true)}
       />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <ContentArea
@@ -67,6 +70,25 @@ const MainLayout: React.FC = () => {
           onBack={() => setCurrentPage(null)}
         />
       </div>
+
+      {/* 智能助手弹窗 */}
+      {assistantOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          zIndex: 1000,
+          height: '100vh'
+        }}>
+          <SmartAssistant
+            onNavigate={(page) => {
+              setCurrentPage(page);
+              setAssistantOpen(false);
+            }}
+            onClose={() => setAssistantOpen(false)}
+          />
+        </div>
+      )}
     </div>
   );
 };
