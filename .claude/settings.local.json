@@ -57,7 +57,10 @@
       "Bash(npm list:*)",
       "Bash(reg query:*)",
       "Read(//d/code/AI/boost-tools/$APPDATA/**)",
-      "Read(//d/code/AI/boost-tools/**)"
+      "Read(//d/code/AI/boost-tools/**)",
+      "Bash(node:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

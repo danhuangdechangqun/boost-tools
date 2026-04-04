@@ -149,7 +149,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, onNavigate }) => {
     const model = values.llm?.model;
 
     if (!apiUrl || !apiKey || !model) {
-      message.error('请先填写完整的API配置（地址、密钥、模型）');
+      message.warning('请先填写完整的API配置后再测试连接');
       return;
     }
 
@@ -263,13 +263,13 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, onNavigate }) => {
               </Select>
             </Form.Item>
 
-            <Form.Item name={['llm', 'apiUrl']} label="API地址" rules={[{ required: true, message: '请输入API地址' }]}>
+            <Form.Item name={['llm', 'apiUrl']} label="API地址">
               <Input placeholder="如: https://api.anthropic.com" />
             </Form.Item>
-            <Form.Item name={['llm', 'apiKey']} label="API Key" rules={[{ required: true, message: '请输入API Key' }]}>
+            <Form.Item name={['llm', 'apiKey']} label="API Key">
               <Input.Password placeholder="输入您的API密钥" />
             </Form.Item>
-            <Form.Item name={['llm', 'model']} label="模型名称" rules={[{ required: true, message: '请输入模型名称' }]}>
+            <Form.Item name={['llm', 'model']} label="模型名称">
               <Input placeholder="如: claude-sonnet-4-6, glm-5" />
             </Form.Item>
             <Form.Item name={['llm', 'format']} initialValue="openai" hidden>
@@ -341,23 +341,25 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, onNavigate }) => {
             </Form.Item>
           </Card>
 
-          <Card
-            title="提示词管理"
-            style={{ marginBottom: 16, cursor: 'pointer' }}
-            onClick={() => onNavigate?.('prompt-manager')}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <p style={{ margin: 0, color: '#6B7280', fontSize: 14 }}>
-                  自定义各功能的AI提示词模板，实时生效
-                </p>
-                <p style={{ margin: '8px 0 0', color: '#9CA3AF', fontSize: 12 }}>
-                  包含：意图识别、反馈分析、数据清洗、RAG问答等
-                </p>
+          {import.meta.env.DEV && (
+            <Card
+              title="提示词管理"
+              style={{ marginBottom: 16, cursor: 'pointer' }}
+              onClick={() => onNavigate?.('prompt-manager')}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <p style={{ margin: 0, color: '#6B7280', fontSize: 14 }}>
+                    自定义各功能的AI提示词模板，实时生效
+                  </p>
+                  <p style={{ margin: '8px 0 0', color: '#9CA3AF', fontSize: 12 }}>
+                    包含：意图识别、反馈分析、数据清洗、RAG问答等
+                  </p>
+                </div>
+                <FileText size={24} color="#3B82F6" />
               </div>
-              <FileText size={24} color="#3B82F6" />
-            </div>
-          </Card>
+            </Card>
+          )}
 
           <Button type="primary" htmlType="submit" icon={<Save size={14} />} size="large">保存设置</Button>
         </Form>
