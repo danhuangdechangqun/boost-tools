@@ -1,15 +1,27 @@
-// 对话窗口组件
+// 对话窗口组件 - 集成智能体
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Input, Button, Spin, Card, Tag, Space, Typography } from 'antd';
-import { SendOutlined, CopyOutlined, LinkOutlined, ClearOutlined, BulbOutlined } from '@ant-design/icons';
+import { Input, Button, Spin, Tag, Typography } from 'antd';
+import { SendOutlined, ClearOutlined, BulbOutlined, DownOutlined, UpOutlined } from '@ant-design/icons';
 import { Message, ToolResult, IntentType } from './types';
 import { useIntent } from './hooks/useIntent';
 import { useSession } from './hooks/useSession';
 import { useToolExecutor } from './hooks/useToolExecutor';
+import { useAgentOrchestrator } from './hooks/useAgentOrchestrator';
 import { message as antMessage } from 'antd';
+import ExecutionDetailDrawer from './components/ExecutionDetailDrawer';
+import { AgentConfig, DEFAULT_AGENT_CONFIG, TaskPlan, TaskReflection, ExecutionLogEntry } from './agentTypes';
 
-const { Paragraph } = Typography;
+const { Paragraph, Text } = Typography;
+
+// 扩展消息类型，包含智能体执行信息
+interface AgentMessage extends Message {
+  agentPhase?: 'planning' | 'executing' | 'reflecting' | 'completed';
+  plan?: TaskPlan;
+  reflection?: TaskReflection;
+  executionLog?: ExecutionLogEntry[];
+  detailExpanded?: boolean;
+}
 
 interface ChatWindowProps {
   onClose: () => void;
@@ -23,8 +35,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   knowledgeBaseReady = false
 }) => {
   const [input, setInput] = useState('');
+  const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
+  const [thinkingDetailExpanded, setThinkingDetailExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // 原有的意图识别和工具执行（用于简单任务fallback）
   const { recognizeIntent, loading: intentLoading } = useIntent();
   const {
     messages,
@@ -38,12 +53,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   } = useSession();
   const { execute, loading: toolLoading } = useToolExecutor();
 
-  const loading = intentLoading || toolLoading;
+  // 智能体主控制器
+  const agent = useAgentOrchestrator();
+
+  const loading = intentLoading || toolLoading || agent.loading;
 
   // 自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [agentMessages, agent.phase]);
+
+  // 切换详情展开状态
+  const toggleDetailExpanded = (messageId: string) => {
+    setAgentMessages(prev => prev.map(msg =>
+      msg.id === messageId ? { ...msg, detailExpanded: !msg.detailExpanded } : msg
+    ));
+  };
 
   // 发送消息
   const handleSend = async () => {
@@ -51,7 +76,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     if (!text || loading) return;
 
     setInput('');
-    addUserMessage(text);
+    setThinkingDetailExpanded(false); // 重置详情展开状态
+
+    // 添加用户消息
+    const userMsgId = Date.now().toString();
+    const userMsg: AgentMessage = {
+      id: userMsgId,
+      role: 'user',
+      content: text,
+      timestamp: new Date().toISOString()
+    };
+    setAgentMessages(prev => [...prev, userMsg]);
 
     // 如果在等待数据
     if (pendingData) {
@@ -59,28 +94,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       return;
     }
 
-    // 识别意图
-    const intentResult = await recognizeIntent(text);
+    // 使用智能体执行
+    const agentResult = await agent.execute(text, knowledgeBaseReady);
 
-    if (intentResult.intent === 'unknown') {
-      // 无法识别，反问澄清
-      addAssistantMessage(
-        '抱歉，我不太确定您想要做什么。您可以尝试：\n\n' +
-        '• "格式化JSON" - 格式化JSON数据\n' +
-        '• "生成UUID" - 生成唯一标识\n' +
-        '• "转成SQL IN" - 转换数据格式\n' +
-        '• "比较文本差异" - 对比两段文本\n' +
-        '• "知识库问答" - 基于知识库回答问题\n\n' +
-        '请告诉我您具体需要什么帮助？'
-      );
-      return;
-    }
-
-    // 执行工具
-    await executeTool(intentResult.intent, {
-      ...intentResult.params
-      // 注意：不再把用户输入当作默认数据，只有明确提取的数据才传递
-    });
+    // 添加助手消息（包含执行信息）
+    const assistantMsg: AgentMessage = {
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content: agentResult.result || '任务完成',
+      timestamp: new Date().toISOString(),
+      agentPhase: agentResult.success ? 'completed' : undefined,
+      plan: agentResult.plan,
+      reflection: agentResult.reflection,
+      executionLog: agentResult.executionLog,
+      detailExpanded: false
+    };
+    setAgentMessages(prev => [...prev, assistantMsg]);
   };
 
   // 处理等待数据的情况
@@ -90,7 +119,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     clearWaitingData();
   };
 
-  // 执行工具
+  // 执行工具（原有流程）
   const executeTool = async (intent: IntentType, params: any) => {
     const result = await execute(intent, params, knowledgeBaseReady);
     handleToolResult(result, intent);
@@ -99,14 +128,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   // 处理工具结果
   const handleToolResult = (result: ToolResult, intent: IntentType) => {
     if (result.needData) {
-      // 需要用户提供数据
       setWaitingData(result.dataPrompt || '请提供数据', intent);
       addAssistantMessage(result.dataPrompt || '请提供数据');
       return;
     }
 
     if (!result.success) {
-      // 执行失败
       let content = result.error || '操作失败';
       if (result.linkTo) {
         content += `\n\n[前往工具] →`;
@@ -118,7 +145,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       return;
     }
 
-    // 成功
     addAssistantMessage(formatResult(result.data), {
       intent,
       toolResult: result
@@ -133,10 +159,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     return JSON.stringify(data, null, 2);
   };
 
-  // 复制内容
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    antMessage.success('已复制');
+  // 清空会话
+  const handleClearSession = () => {
+    clearSession();
+    agent.reset();
+    setAgentMessages([]);
+    setThinkingDetailExpanded(false);
   };
 
   // 快捷提示
@@ -169,12 +197,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 20 }}>🤖</span>
           <span style={{ fontWeight: 600, fontSize: 16 }}>智能助手</span>
+          <Tag color="purple" style={{ fontSize: 10 }}>Agent</Tag>
         </div>
         <Button
           icon={<ClearOutlined />}
           size="small"
-          onClick={clearSession}
-          disabled={messages.length === 0}
+          onClick={handleClearSession}
+          disabled={agentMessages.length === 0 && agent.phase === 'idle'}
         >
           清空
         </Button>
@@ -186,7 +215,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         overflow: 'auto',
         padding: 16
       }}>
-        {messages.length === 0 && (
+        {agentMessages.length === 0 && agent.phase === 'idle' && (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: '#6B7280' }}>
             <BulbOutlined style={{ fontSize: 32, marginBottom: 16, color: '#F59E0B' }} />
             <div style={{ fontWeight: 500, marginBottom: 8 }}>您好！我是智能助手</div>
@@ -199,9 +228,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 <Tag
                   key={i}
                   style={{ cursor: 'pointer', marginBottom: 4 }}
-                  onClick={() => {
-                    setInput(s);
-                  }}
+                  onClick={() => setInput(s)}
                 >
                   {s}
                 </Tag>
@@ -210,65 +237,138 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         )}
 
-        {messages.map(msg => (
-          <div
-            key={msg.id}
-            style={{
-              marginBottom: 16,
-              display: 'flex',
-              flexDirection: msg.role === 'user' ? 'row-reverse' : 'row'
-            }}
-          >
-            <div style={{
-              maxWidth: '85%',
-              padding: '12px 16px',
-              borderRadius: msg.role === 'user'
-                ? '16px 4px 16px 16px'
-                : '4px 16px 16px 16px',
-              background: msg.role === 'user' ? '#3B82F6' : '#F3F4F6',
-              color: msg.role === 'user' ? '#FFFFFF' : '#1F2937'
-            }}>
-              <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 14 }}>{msg.content}</div>
+        {agentMessages.map((msg, index) => {
+          // 在助手消息前显示"已完成思考"指示器
+          const showCompletedThinking = msg.role === 'assistant' &&
+            msg.agentPhase === 'completed' &&
+            msg.executionLog?.length;
 
-              {/* 操作按钮 */}
-              {msg.role === 'assistant' && msg.toolResult?.success && msg.toolResult.data && (
-                <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                  <Button
-                    size="small"
-                    icon={<CopyOutlined />}
-                    onClick={() => handleCopy(msg.toolResult.data)}
-                  >
-                    复制
-                  </Button>
-                  {msg.toolResult.linkTo && (
+          return (
+            <React.Fragment key={msg.id}>
+              {/* 已完成思考指示器（在助手消息之前） */}
+              {showCompletedThinking && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  marginBottom: 8
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 16px',
+                    background: '#E8F5E9',
+                    borderRadius: 8,
+                  }}>
+                    <span style={{ color: '#4CAF50', fontSize: 16 }}>✓</span>
+                    <Text style={{ color: '#4CAF50', flex: 1 }}>已完成思考</Text>
                     <Button
                       size="small"
-                      icon={<LinkOutlined />}
-                      onClick={() => onNavigate(msg.toolResult.linkTo!)}
+                      type="text"
+                      icon={msg.detailExpanded ? <UpOutlined /> : <DownOutlined />}
+                      onClick={() => toggleDetailExpanded(msg.id)}
+                      style={{ color: '#6B7280' }}
                     >
-                      {msg.toolResult.linkText || '打开工具'}
+                      {msg.detailExpanded ? '收起' : '查看详情'}
                     </Button>
+                  </div>
+                  {msg.detailExpanded && msg.plan && (
+                    <div style={{
+                      background: '#F9FAFB',
+                      borderRadius: 8,
+                      padding: 12,
+                      maxHeight: 300,
+                      overflow: 'auto',
+                      border: '1px solid #E5E7EB'
+                    }}>
+                      <ExecutionDetailDrawer
+                        plan={msg.plan}
+                        reflection={msg.reflection || undefined}
+                        executionLog={msg.executionLog}
+                      />
+                    </div>
                   )}
                 </div>
               )}
 
-              {/* 跳转按钮 */}
-              {msg.role === 'assistant' && msg.toolResult?.linkTo && !msg.toolResult.success && (
-                <div style={{ marginTop: 8 }}>
-                  <Button
-                    size="small"
-                    type="primary"
-                    onClick={() => onNavigate(msg.toolResult.linkTo!)}
-                  >
-                    {msg.toolResult.linkText || '前往'}
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+              {/* 消息内容 */}
+              <div style={{
+                marginBottom: 16,
+                display: 'flex',
+                flexDirection: msg.role === 'user' ? 'row-reverse' : 'row'
+              }}>
+                <div style={{
+                  maxWidth: '85%',
+                  padding: '12px 16px',
+                  borderRadius: msg.role === 'user'
+                    ? '16px 4px 16px 16px'
+                    : '4px 16px 16px 16px',
+                  background: msg.role === 'user' ? '#3B82F6' : '#F3F4F6',
+                  color: msg.role === 'user' ? '#FFFFFF' : '#1F2937'
+                }}>
+                  <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 14 }}>{msg.content}</div>
 
-        {loading && (
+                  {/* 跳转按钮（仅失败时显示） */}
+                  {msg.role === 'assistant' && msg.toolResult?.linkTo && !msg.toolResult?.success && (
+                    <div style={{ marginTop: 8 }}>
+                      <Button
+                        size="small"
+                        type="primary"
+                        onClick={() => onNavigate(msg.toolResult!.linkTo!)}
+                      >
+                        {msg.toolResult?.linkText || '前往'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </React.Fragment>
+          );
+        })}
+
+        {/* 思考状态指示器（在最后一条消息后面） */}
+        {/* 正在思考 */}
+        {loading && agent.phase !== 'idle' && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            marginBottom: 16
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 16px',
+              background: '#F3F4F6',
+              borderRadius: 8,
+            }}>
+              <Spin size="small" />
+              <Text style={{ color: '#6B7280', flex: 1 }}>正在思考中...</Text>
+              <Button
+                size="small"
+                type="text"
+                icon={thinkingDetailExpanded ? <UpOutlined /> : <DownOutlined />}
+                onClick={() => setThinkingDetailExpanded(!thinkingDetailExpanded)}
+                style={{ color: '#6B7280' }}
+              >
+                {thinkingDetailExpanded ? '收起' : '查看详情'}
+              </Button>
+            </div>
+            {thinkingDetailExpanded && agent.plan && (
+              <div style={{ background: '#F9FAFB', borderRadius: 8, padding: 12, maxHeight: 300, overflow: 'auto' }}>
+                <ExecutionDetailDrawer
+                  plan={agent.plan}
+                  reflection={agent.reflection || undefined}
+                  executionLog={agent.executionLog}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {loading && agent.phase === 'idle' && (
           <div style={{ textAlign: 'center', padding: 20 }}>
             <Spin tip="思考中..." />
           </div>
@@ -287,12 +387,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={(e) => {
-            // Enter 发送消息（非 Shift/Ctrl 组合时）
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
               e.preventDefault();
               handleSend();
             }
-            // Ctrl+Enter 手动插入换行
             if (e.key === 'Enter' && e.ctrlKey) {
               e.preventDefault();
               const textarea = e.currentTarget;
@@ -300,13 +398,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               const end = textarea.selectionEnd;
               const newInput = input.substring(0, start) + '\n' + input.substring(end);
               setInput(newInput);
-              // 恢复光标位置
               setTimeout(() => {
                 textarea.selectionStart = textarea.selectionEnd = start + 1;
               }, 0);
             }
           }}
-          placeholder="输入您需要... (Shift/Ctrl+Enter 换行)"
+          placeholder="输入您需要... (Ctrl+Enter 换行)"
           disabled={loading}
           autoSize={{ minRows: 1, maxRows: 6 }}
           style={{ borderRadius: 8, marginBottom: 8 }}

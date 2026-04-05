@@ -60,7 +60,8 @@ const MainLayout: React.FC = () => {
           setCurrentPage(null);
         }}
         onSettingsClick={() => setCurrentPage('settings')}
-        onAssistantClick={() => setAssistantOpen(true)}
+        onAssistantClick={() => setAssistantOpen(!assistantOpen)}
+        assistantOpen={assistantOpen}
       />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <ContentArea

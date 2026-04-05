@@ -6,6 +6,7 @@ interface SidebarProps {
   onGroupChange: (group: string) => void;
   onSettingsClick: () => void;
   onAssistantClick: () => void;
+  assistantOpen?: boolean;
 }
 
 const groups = [
@@ -16,7 +17,7 @@ const groups = [
   { id: 'data', icon: Database, name: '数据' }
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ currentGroup, onGroupChange, onSettingsClick, onAssistantClick }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentGroup, onGroupChange, onSettingsClick, onAssistantClick, assistantOpen = false }) => {
   return (
     <nav style={{
       width: 80,
@@ -41,22 +42,32 @@ const Sidebar: React.FC<SidebarProps> = ({ currentGroup, onGroupChange, onSettin
           justifyContent: 'center',
           gap: 4,
           cursor: 'pointer',
-          background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
-          border: 'none',
-          boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+          background: assistantOpen
+            ? 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)'
+            : 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
+          border: assistantOpen ? '2px solid #FFFFFF' : 'none',
+          boxShadow: assistantOpen
+            ? '0 6px 16px rgba(139, 92, 246, 0.5)'
+            : '0 4px 12px rgba(59, 130, 246, 0.3)',
           transition: 'all 150ms ease'
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.05)';
-          e.currentTarget.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.4)';
+          if (!assistantOpen) {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.4)';
+          }
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
+          if (!assistantOpen) {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
+          }
         }}
       >
         <Sparkles size={20} color="#FFFFFF" />
-        <span style={{ fontSize: 11, color: '#FFFFFF', fontWeight: 600 }}>助手</span>
+        <span style={{ fontSize: 11, color: '#FFFFFF', fontWeight: 600 }}>
+          {assistantOpen ? '收起' : '助手'}
+        </span>
       </button>
 
       <div style={{ width: 32, height: 1, background: '#E5E7EB', margin: '4px 0' }} />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Input, Card, Modal, Form, message, Spin, Tag } from 'antd';
-import { ArrowLeft, Plus, Trash2, Check, Calendar, GripVertical, RotateCcw, History } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Check, Calendar, GripVertical, RotateCcw, History, AlertCircle } from 'lucide-react';
 import dayjs from 'dayjs';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import { getTodos, addTodo, updateTodo, deleteTodo, callLlm, TodoItem, shouldGenerateWeeklyReport } from '@/services/api';
@@ -9,7 +9,7 @@ interface TodoPageProps {
   onBack: () => void;
 }
 
-type TodoGroup = 'today' | 'tomorrow' | 'nextWeek' | 'overdue';
+type TodoGroup = 'today' | 'tomorrow' | 'nextWeek' | 'overdue' | 'incomplete';
 
 const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
   const [todos, setTodos] = useState<TodoItem[]>([]);
@@ -27,18 +27,38 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
   const [editForm] = Form.useForm();
   const [isWeeklyReportTime, setIsWeeklyReportTime] = useState(false);
 
-  // 自动迁移：将过期的"tomorrow"任务迁移到"today"
+  // 自动迁移：将过期的"tomorrow"任务迁移到"incomplete"
   const autoMigrateTodos = async (todoList: TodoItem[]) => {
     const today = dayjs().format('YYYY-MM-DD');
-    const needsMigration = todoList.filter(t =>
+    const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+
+    // 找出需要迁移的任务：
+    // 1. 昨天的今日待办未完成 -> incomplete
+    // 2. 过期的明日待办 -> today
+    const needsMigrationToIncomplete = todoList.filter(t =>
+      t.group === 'today' && t.status === 'pending' && t.dueDate && t.dueDate < today
+    );
+
+    const needsMigrationToToday = todoList.filter(t =>
       t.group === 'tomorrow' && t.status === 'pending' && t.dueDate && t.dueDate < today
     );
 
-    if (needsMigration.length > 0) {
-      for (const todo of needsMigration) {
-        await updateTodo(todo.id, { group: 'today' });
-      }
-      message.info(`${needsMigration.length}个任务已自动迁移到今日待办`);
+    let migratedCount = 0;
+
+    // 昨日未完成的任务迁移到"未完成"
+    for (const todo of needsMigrationToIncomplete) {
+      await updateTodo(todo.id, { group: 'incomplete' });
+      migratedCount++;
+    }
+
+    // 过期的明日待办迁移到今日
+    for (const todo of needsMigrationToToday) {
+      await updateTodo(todo.id, { group: 'today' });
+      migratedCount++;
+    }
+
+    if (migratedCount > 0) {
+      message.info(`${migratedCount}个任务已自动迁移`);
       return true;
     }
     return false;
@@ -323,6 +343,44 @@ ${nextWeekSection}
               {renderDroppableColumn('下周计划', 'nextWeek', '#FFFFFF')}
             </div>
           </DragDropContext>
+        )}
+
+        {/* 未完成待办 - 在本周已完成上面 */}
+        {getGroupTodos('incomplete').length > 0 && (
+          <div style={{ marginTop: 16, padding: 12, background: '#FEF3C7', borderRadius: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertCircle size={18} color="#D97706" />
+                <h4 style={{ margin: 0, color: '#D97706' }}>未完成待办 ({getGroupTodos('incomplete').length})</h4>
+              </div>
+              <Button
+                size="small"
+                type="primary"
+                onClick={async () => {
+                  const incompleteTodos = getGroupTodos('incomplete');
+                  for (const todo of incompleteTodos) {
+                    await updateTodo(todo.id, { group: 'today' });
+                  }
+                  message.success(`已将${incompleteTodos.length}个任务移至今日待办`);
+                  loadTodos();
+                }}
+              >
+                全部移至今日
+              </Button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {getGroupTodos('incomplete').map(item => (
+                <Tag
+                  key={item.id}
+                  color="warning"
+                  style={{ margin: 0, cursor: 'pointer' }}
+                  onDoubleClick={() => handleDoubleClick(item)}
+                >
+                  {item.title}
+                </Tag>
+              ))}
+            </div>
+          </div>
         )}
 
         {completedTodos.length > 0 && (

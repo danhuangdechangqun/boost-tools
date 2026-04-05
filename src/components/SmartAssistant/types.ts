@@ -13,6 +13,7 @@ export type IntentType =
   | 'crypto'         // 加密计算
   | 'feedback'       // 反馈分析
   | 'ticket'         // 工单分析
+  | 'todo'           // 待办管理
   | 'unknown';       // 无法识别
 
 // 意图识别结果
@@ -183,6 +184,15 @@ export const TOOL_REGISTRY: Record<IntentType, ToolDefinition> = {
     needsData: true,
     dataPrompt: '请粘贴工单数据',
     handler: 'handleTicket'
+  },
+  todo: {
+    id: 'todo',
+    name: '待办管理',
+    keywords: ['待办', 'todo', '任务', '今日待办', '明日待办', '下周计划', '周报'],
+    matchMode: 'fuzzy',
+    needsData: true,
+    dataPrompt: '请描述要添加的待办任务',
+    handler: 'handleTodo'
   },
   unknown: {
     id: 'unknown',

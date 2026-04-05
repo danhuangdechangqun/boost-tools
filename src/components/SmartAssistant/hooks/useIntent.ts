@@ -30,13 +30,14 @@ export function useIntent() {
     try {
       // 先尝试规则匹配（快速路径）
       const quickResult = quickMatch(userInput);
-      if (quickResult && quickResult.confidence > 0.9) {
+      // 如果快速匹配成功且置信度高，直接返回（不调用LLM）
+      if (quickResult && quickResult.confidence >= 0.9) {
         return quickResult;
       }
 
-      // 使用LLM识别
+      // 快速匹配置信度不够时，才使用LLM识别
       if (!promptTemplate) {
-        // 如果提示词未加载，使用默认规则匹配
+        // 如果提示词未加载，使用快速匹配结果（即使置信度较低）
         return quickResult || { intent: 'unknown', confidence: 0 };
       }
 
@@ -102,25 +103,7 @@ function quickMatch(input: string): IntentResult | null {
     };
   }
 
-  // 检测数据列表（适合SQL IN转换）
-  // 多行数据、空格分隔的数字/文本列表
-  const lines = trimmedInput.split(/\n/).filter(l => l.trim());
-  const spaceSeparated = trimmedInput.split(/[\s,]+/).filter(s => s.trim());
-
-  // 如果有多行数据（至少2行），或者多个空格/逗号分隔的项目（至少3个）
-  if (lines.length >= 2 || spaceSeparated.length >= 3) {
-    // 判断是否看起来像数据列表（不是句子）
-    const isDataList = lines.length >= 2
-      || (spaceSeparated.length >= 3 && !trimmedInput.match(/[a-zA-Z]{10,}/)); // 不是长句子
-
-    if (isDataList && !lowerInput.match(/格式化|美化|比较|生成|计算|分析|知识库/)) {
-      return {
-        intent: 'sql_in',
-        confidence: 0.95,
-        params: { data: trimmedInput }
-      };
-    }
-  }
+  // 注意：SQL IN 只在显式请求时触发，不自动检测数据列表
 
   // 精准匹配规则
   const preciseRules: { patterns: RegExp[]; intent: IntentType; params?: any }[] = [
@@ -141,7 +124,8 @@ function quickMatch(input: string): IntentResult | null {
       intent: 'uuid'
     },
     {
-      patterns: [/sql\s*in/, /in.*格式/, /转.*sql/],
+      // SQL IN 只在显式请求时才触发
+      patterns: [/sql\s*in/i, /转.*sql\s*in/i, /sql\s*in.*格式/i, /生成.*sql\s*in/i],
       intent: 'sql_in'
     },
     {
@@ -157,6 +141,11 @@ function quickMatch(input: string): IntentResult | null {
       patterns: [/计算.*sha/, /sha.*哈希/, /sha256/],
       intent: 'crypto',
       params: { algorithm: 'sha256' }
+    },
+    {
+      // 待办管理 - 优先级高
+      patterns: [/加.*待办/, /添加.*待办/, /今日待办/, /明日待办/, /下周计划/, /待办.*任务/, /开个.*待办/],
+      intent: 'todo'
     }
   ];
 
@@ -230,10 +219,19 @@ function extractData(input: string): string | undefined {
 function extractUuidParams(input: string): { count?: number; prefix?: string } {
   const result: { count?: number; prefix?: string } = {};
 
-  // 提取数量：匹配"X条"、"X个"、"生成X"等
-  const countMatch = input.match(/(?:要|生成|生成\s*)(\d+)(?:条|个)/i);
-  if (countMatch) {
-    result.count = parseInt(countMatch[1], 10);
+  // 提取数量：匹配"X条"、"X个"、"输出X"、"生成X"、"给我X条"等
+  const countPatterns = [
+    /(?:输出|生成|要|给我|来)\s*(\d+)\s*(?:条|个)/i,
+    /(\d+)\s*(?:条|个)(?:uuid|UUID)/i,
+    /(?:要|生成)\s*(\d+)/i
+  ];
+
+  for (const pattern of countPatterns) {
+    const countMatch = input.match(pattern);
+    if (countMatch) {
+      result.count = parseInt(countMatch[1], 10);
+      break;
+    }
   }
 
   // 提取前缀：匹配"前缀为XXX"、"前缀XXX"、"加前缀XXX"等

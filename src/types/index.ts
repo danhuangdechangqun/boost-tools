@@ -22,7 +22,7 @@ export interface TodoItem {
   id: string;
   title: string;
   description?: string;
-  group: 'today' | 'tomorrow' | 'nextWeek' | 'overdue' | 'completed';
+  group: 'today' | 'tomorrow' | 'nextWeek' | 'overdue' | 'incomplete' | 'completed';
   status: 'pending' | 'completed';
   dueDate?: string;
   createTime: string;

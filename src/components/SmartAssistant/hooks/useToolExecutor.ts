@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { ToolResult, IntentType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import CryptoJS from 'crypto-js';
+import { addTodo, TodoItem } from '@/services/api';
 
 // 格式化JSON
 function formatJSON(data: string): { success: boolean; result?: string; error?: string } {
@@ -97,6 +98,124 @@ function calculateHash(data: string, algorithm: string): string {
   }
 }
 
+// 解析时间描述为Cron表达式
+function parseTimeToCron(desc: string): string | null {
+  const lower = desc.toLowerCase().trim();
+
+  // 每年每月凌晨1点0分0秒 -> 0 1 1 * ?
+  if (lower.includes('每年') && lower.includes('每月') && lower.includes('凌晨')) {
+    const hourMatch = lower.match(/凌晨(\d+)点/);
+    const hour = hourMatch ? parseInt(hourMatch[1]) : 1;
+    return `0 ${hour} 1 * ?`;
+  }
+
+  // 每年每月某日
+  if (lower.includes('每年') && lower.includes('每月')) {
+    const dayMatch = lower.match(/(\d+)日/);
+    const hourMatch = lower.match(/(\d+)点/);
+    const minMatch = lower.match(/(\d+)分/);
+    const day = dayMatch ? parseInt(dayMatch[1]) : 1;
+    const hour = hourMatch ? parseInt(hourMatch[1]) : 0;
+    const min = minMatch ? parseInt(minMatch[1]) : 0;
+    return `${min} ${hour} ${day} * ?`;
+  }
+
+  // 每年某月
+  if (lower.includes('每年')) {
+    const monthMatch = lower.match(/(\d+)月/);
+    const dayMatch = lower.match(/(\d+)日/);
+    const hourMatch = lower.match(/(\d+)点/);
+    const minMatch = lower.match(/(\d+)分/);
+    const month = monthMatch ? parseInt(monthMatch[1]) : 1;
+    const day = dayMatch ? parseInt(dayMatch[1]) : 1;
+    const hour = hourMatch ? parseInt(hourMatch[1]) : 0;
+    const min = minMatch ? parseInt(minMatch[1]) : 0;
+    return `${min} ${hour} ${day} ${month} ?`;
+  }
+
+  // 每月某日
+  if (lower.includes('每月')) {
+    const dayMatch = lower.match(/(\d+)日/);
+    const hourMatch = lower.match(/(\d+)点/);
+    const minMatch = lower.match(/(\d+)分/);
+    const day = dayMatch ? parseInt(dayMatch[1]) : 1;
+    const hour = hourMatch ? parseInt(hourMatch[1]) : 0;
+    const min = minMatch ? parseInt(minMatch[1]) : 0;
+    return `${min} ${hour} ${day} * ?`;
+  }
+
+  // 每天/每日
+  if (lower.includes('每天') || lower.includes('每日')) {
+    const hourMatch = lower.match(/(\d+)点/);
+    const minMatch = lower.match(/(\d+)分/);
+    const hour = hourMatch ? parseInt(hourMatch[1]) : 0;
+    const min = minMatch ? parseInt(minMatch[1]) : 0;
+
+    // 早上/上午
+    if (lower.includes('早上') || lower.includes('上午')) {
+      return `${min} ${hour} * * ?`;
+    }
+    // 下午/晚上
+    if (lower.includes('下午') || lower.includes('晚上') || lower.includes('傍晚')) {
+      return `${min} ${hour + 12} * * ?`;
+    }
+    // 凌晨
+    if (lower.includes('凌晨')) {
+      return `${min} ${hour} * * ?`;
+    }
+    return `${min} ${hour} * * ?`;
+  }
+
+  // 每周几
+  const weekDays: Record<string, number> = {
+    '日': 1, '天': 1, '一': 2, '二': 3, '三': 4, '四': 5, '五': 6, '六': 7
+  };
+  for (const [day, cronDay] of Object.entries(weekDays)) {
+    if (lower.includes(`每周${day}`) || lower.includes(`每周天`)) {
+      const hourMatch = lower.match(/(\d+)点/);
+      const minMatch = lower.match(/(\d+)分/);
+      const hour = hourMatch ? parseInt(hourMatch[1]) : 0;
+      const min = minMatch ? parseInt(minMatch[1]) : 0;
+
+      if (lower.includes('下午') || lower.includes('晚上')) {
+        return `${min} ${hour + 12} ? * ${cronDay}`;
+      }
+      return `${min} ${hour} ? * ${cronDay}`;
+    }
+  }
+
+  // 每小时
+  if (lower.includes('每小时')) {
+    const minMatch = lower.match(/(\d+)分/);
+    const min = minMatch ? parseInt(minMatch[1]) : 0;
+    return `${min} * * * ?`;
+  }
+
+  // 每隔X分钟/小时
+  const intervalMinMatch = lower.match(/每隔(\d+)分钟/);
+  if (intervalMinMatch) {
+    const interval = parseInt(intervalMinMatch[1]);
+    return `0 */${interval} * * ?`;
+  }
+
+  const intervalHourMatch = lower.match(/每隔(\d+)小时/);
+  if (intervalHourMatch) {
+    const interval = parseInt(intervalHourMatch[1]);
+    return `0 0 */${interval} * ?`;
+  }
+
+  // 工作日（周一到周五）
+  if (lower.includes('工作日') || lower.includes('每工作日')) {
+    const hourMatch = lower.match(/(\d+)点/);
+    const minMatch = lower.match(/(\d+)分/);
+    const hour = hourMatch ? parseInt(hourMatch[1]) : 9;
+    const min = minMatch ? parseInt(minMatch[1]) : 0;
+    return `${min} ${hour} ? * 2-6`;
+  }
+
+  return null;
+}
+
 // 预设正则表达式
 const REGEX_PRESETS: Record<string, { name: string; pattern: string; desc: string }> = {
   email: { name: '邮箱', pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$', desc: '匹配邮箱地址' },
@@ -150,13 +269,54 @@ export function useToolExecutor() {
           return handleTextDiff();
 
         case 'cron':
-          return handleCron();
+          return handleCron(params.data || params.timeDesc);
 
         case 'feedback':
           return handleFeedback();
 
         case 'ticket':
           return handleTicket();
+
+        case 'todo': {
+          if (!params.title) {
+            return {
+              success: true,
+              needData: true,
+              dataPrompt: '请描述要添加的待办任务（如：今日待办，任务是测试，描述是增加测试用例）',
+              linkTo: 'todo',
+              linkText: '打开待办管理'
+            };
+          }
+
+          try {
+            const todoData: Omit<TodoItem, 'id' | 'createTime'> = {
+              title: params.title,
+              description: params.description || '',
+              status: 'pending',
+              group: params.group || 'today'
+            };
+            await addTodo(todoData);
+
+            const groupNames: Record<string, string> = {
+              'today': '今日待办',
+              'tomorrow': '明日待办',
+              'nextWeek': '下周计划',
+              'incomplete': '未完成'
+            };
+
+            return {
+              success: true,
+              data: `已添加待办任务：${params.title}\n分组：${groupNames[params.group || 'today'] || '今日待办'}${params.description ? `\n描述：${params.description}` : ''}`,
+              linkTo: 'todo',
+              linkText: '查看待办'
+            };
+          } catch (e: any) {
+            return {
+              success: false,
+              error: `添加待办失败：${e.message}`
+            };
+          }
+        }
 
         default:
           return { success: false, error: '未知工具' };
@@ -307,11 +467,31 @@ function handleTextDiff(): ToolResult {
   };
 }
 
-function handleCron(): ToolResult {
+function handleCron(timeDesc?: string): ToolResult {
+  if (!timeDesc) {
+    return {
+      success: true,
+      needData: true,
+      dataPrompt: '请描述定时任务的执行周期（如：每天早上8点、每周一上午10点）',
+      linkTo: 'cron',
+      linkText: '打开Cron工具'
+    };
+  }
+
+  // 解析时间描述并生成cron表达式
+  const cronExpr = parseTimeToCron(timeDesc);
+
+  if (cronExpr) {
+    return {
+      success: true,
+      data: `Cron表达式: ${cronExpr}\n\n说明: ${timeDesc}`,
+      showInDialog: true
+    };
+  }
+
   return {
-    success: true,
-    needData: true,
-    dataPrompt: '请描述定时任务的执行周期（如：每天早上8点、每周一上午10点）',
+    success: false,
+    error: `无法解析时间描述: "${timeDesc}"，请使用更清晰的描述`,
     linkTo: 'cron',
     linkText: '打开Cron工具'
   };

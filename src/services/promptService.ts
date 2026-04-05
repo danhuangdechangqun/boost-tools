@@ -26,13 +26,14 @@ export const DEFAULT_PROMPTS: PromptDefinition[] = [
 
 | 意图ID | 名称 | 触发条件 |
 |--------|------|---------|
+| todo | 待办管理 | 用户要添加待办任务、今日待办、明日待办、下周计划 |
 | knowledge | 知识库问答 | 用户提到"知识库"、"文档"、"根据文档"、要查询已有知识 |
 | json_format | JSON格式化 | 用户要格式化、美化、整理JSON数据 |
 | xml_format | XML格式化 | 用户要格式化、美化、整理XML数据 |
 | text_diff | 文本比较 | 用户要比较两段文本的差异、对比文本 |
 | regex | 正则表达式 | 用户要生成正则表达式、匹配某种格式 |
 | cron | Cron表达式 | 用户要生成定时任务表达式、Cron |
-| sql_in | SQL IN转换 | 用户要把数据转成SQL IN格式 |
+| sql_in | SQL IN转换 | 用户明确要求把数据转成SQL IN格式（必须显式提到SQL IN） |
 | uuid | UUID生成 | 用户要生成UUID、唯一标识 |
 | crypto | 加密计算 | 用户要计算MD5、SHA等哈希值 |
 | feedback | 反馈分析 | 用户要分析用户反馈、评价、评论 |
@@ -48,7 +49,10 @@ export const DEFAULT_PROMPTS: PromptDefinition[] = [
   "params": {
     "data": "如果用户已提供数据，提取到这里",
     "algorithm": "加密算法，如md5/sha256",
-    "pattern": "正则匹配的类型，如email/phone"
+    "pattern": "正则匹配的类型，如email/phone",
+    "title": "待办任务标题（todo意图）",
+    "description": "待办任务描述（todo意图）",
+    "group": "待办分组：today/tomorrow/nextWeek（todo意图）"
   },
   "reason": "判断理由"
 }
@@ -59,6 +63,9 @@ export const DEFAULT_PROMPTS: PromptDefinition[] = [
 2. 如果用户提供了数据但没说做什么，intent为unknown
 3. confidence低于0.7时，intent应为unknown
 4. 只输出JSON，不要任何其他文字
+5. **SQL IN转换**：只有用户明确提到"SQL IN"时才识别为sql_in，不要把普通数据列表误判
+6. **待办管理**：用户说"加待办"、"今日待办"、"明日待办"、"下周计划"等应识别为todo意图
+7. **多行待办**：如果用户一次输入多个待办任务，params中用数组形式表示多个任务
 
 ## 用户输入
 {user_input}`,
@@ -240,6 +247,184 @@ export const DEFAULT_PROMPTS: PromptDefinition[] = [
 ---
 {content}`,
     variables: ['content']
+  },
+
+  // ===== 智能体提示词 =====
+  {
+    id: 'agent_should_plan',
+    name: '规划判断',
+    description: '判断用户输入是否需要分解为多步任务',
+    category: '智能体',
+    template: `你是一个任务判断专家，需要判断用户的输入是否需要分解为多个步骤。
+
+## 可用工具
+{tool_list}
+
+## 用户输入
+{user_input}
+
+## 输出格式（只输出JSON，不要其他内容）
+{
+  "needsPlanning": true/false,
+  "reason": "判断理由",
+  "estimatedSteps": 估计步骤数量(1-5)
+}
+
+## 判断规则
+1. 如果用户输入包含多个不同类型的任务关键词（如"格式化JSON然后计算MD5"），needsPlanning=true
+2. 如果用户输入包含连接词（如"然后"、"之后"、"再"），needsPlanning=true
+3. 如果用户输入是简单的单一请求（如"生成一个UUID"），needsPlanning=false
+4. estimatedSteps不超过5`,
+    variables: ['user_input', 'tool_list']
+  },
+  {
+    id: 'agent_planning',
+    name: '任务规划',
+    description: '将复杂任务分解为可执行的步骤列表',
+    category: '智能体',
+    template: `你是一个任务规划专家，需要将用户的需求分解为具体的执行步骤，并从用户输入中提取每个步骤需要的参数。
+
+## 用户需求
+{user_query}
+
+## 可用工具及参数说明
+- json_format: 参数 data=JSON字符串
+- xml_format: 参数 data=XML字符串
+- sql_in: 参数 data=要转换的数据列表
+- uuid: 参数 count=数量, prefix=前缀
+- crypto: 参数 data=要计算的内容, algorithm=算法(md5/sha256)
+- regex: 参数 pattern=正则类型或data=描述
+- text_diff: 参数 data=两段文本(用---分隔)
+- cron: 参数 data=时间描述
+- knowledge: 参数 data=问题
+- feedback: 参数 data=反馈数据
+- ticket: 参数 data=工单数据
+- todo: 参数 title=任务标题, description=任务描述, group=分组(today/tomorrow/nextWeek)
+
+## 输出格式（只输出JSON，不要其他内容）
+{
+  "steps": [
+    {
+      "description": "步骤描述（简洁明确）",
+      "tool": "工具ID",
+      "params": {"参数名": "从用户输入中提取的值"}
+    }
+  ],
+  "estimatedComplexity": "simple/medium/complex",
+  "requiresReflection": true/false
+}
+
+## 关键规则
+1. 必须从用户输入中提取每个步骤需要的完整参数
+2. JSON数据直接提取原始字符串作为data参数
+3. 数字列表、ID列表等直接作为data参数
+4. UUID前缀要完整提取（如"T_FLOW_"）
+5. 加密内容直接提取原字符串
+6. 如果用户没有提供某个步骤的数据，params留空对象{}
+7. 步骤数量不超过5个
+8. **多行待办**：如果用户输入包含多行待办任务，每行分解为单独的todo步骤
+
+## 示例
+用户输入: "把{"name":"test"}格式化，然后生成3个前缀ABC_的UUID"
+输出:
+{
+  "steps": [
+    {"description": "格式化JSON", "tool": "json_format", "params": {"data": "{\"name\":\"test\"}"}},
+    {"description": "生成3个UUID", "tool": "uuid", "params": {"count": 3, "prefix": "ABC_"}}
+  ],
+  "estimatedComplexity": "medium",
+  "requiresReflection": false
+}
+
+用户输入: "帮我加今日待办，任务是测试，描述是增加测试用例"
+输出:
+{
+  "steps": [
+    {"description": "添加今日待办", "tool": "todo", "params": {"title": "测试", "description": "增加测试用例", "group": "today"}}
+  ],
+  "estimatedComplexity": "simple",
+  "requiresReflection": false
+}
+
+用户输入: "帮我加今日待办，任务是测试，描述是增加测试用例\\n  明日待办开个开发，描述是增加开发任务\\n  下周计划加个运维，描述是运维工作"
+输出:
+{
+  "steps": [
+    {"description": "添加今日待办：测试", "tool": "todo", "params": {"title": "测试", "description": "增加测试用例", "group": "today"}},
+    {"description": "添加明日待办：开发", "tool": "todo", "params": {"title": "开发", "description": "增加开发任务", "group": "tomorrow"}},
+    {"description": "添加下周计划：运维", "tool": "todo", "params": {"title": "运维", "description": "运维工作", "group": "nextWeek"}}
+  ],
+  "estimatedComplexity": "medium",
+  "requiresReflection": false
+}`,
+    variables: ['user_query', 'tool_list']
+  },
+  {
+    id: 'agent_step_reflect',
+    name: '单步反思',
+    description: '检查每步执行结果，判断是否需要重试',
+    category: '智能体',
+    template: `你是一个执行检查专家，需要评估步骤的执行结果并决定下一步行动。
+
+## 步骤描述
+{step_description}
+
+## 执行结果
+{execution_result}
+
+## 输出格式（只输出JSON，不要其他内容）
+{
+  "isSuccess": true/false,
+  "issues": ["发现的问题1", "问题2"],
+  "suggestion": "改进建议",
+  "shouldRetry": true/false,
+  "adjustedParams": {"调整后的参数": "值"}
+}
+
+## 评估规则
+1. 如果执行成功且结果符合预期，isSuccess=true，shouldRetry=false
+2. 如果工具报错或结果格式明显错误，isSuccess=false，shouldRetry=true
+3. 如果是因为参数缺失导致失败，shouldRetry=false，在suggestion中说明需要用户提供数据
+4. adjustedParams只在需要调整参数重试时填写
+5. 最多建议重试3次`,
+    variables: ['step_description', 'execution_result']
+  },
+  {
+    id: 'agent_task_reflect',
+    name: '任务反思',
+    description: '整体总结任务完成情况，生成改进建议',
+    category: '智能体',
+    template: `你是一个任务复盘专家，需要对整个任务执行过程进行反思总结。
+
+## 原始需求
+{original_query}
+
+## 执行计划
+{task_plan}
+
+## 各步骤结果
+{step_results}
+
+## 输出格式（只输出JSON，不要其他内容）
+{
+  "summary": "任务完成情况总结（2-3句话）",
+  "successRate": 0.8,
+  "improvements": [
+    "如果再遇到类似任务可以这样改进...",
+    "建议优化的方面..."
+  ],
+  "lessonsLearned": [
+    "经验教训1",
+    "经验教训2"
+  ]
+}
+
+## 反思要点
+1. successRate = 成功步骤数 / 总步骤数
+2. summary要简洁概括整体完成情况
+3. improvements提供可操作的改进建议
+4. lessonsLearned总结可复用的经验`,
+    variables: ['original_query', 'task_plan', 'step_results']
   }
 ];
 
