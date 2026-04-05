@@ -94,10 +94,11 @@ function calculateSuccessRate(plan: TaskPlan): number {
   if (plan.steps.length === 0) return 0;
 
   const successCount = plan.steps.filter(s => s.status === 'success').length;
-  const executedCount = plan.steps.filter(s => s.status !== 'pending' && s.status !== 'skipped').length;
+  // 总步骤数：只有 skipped（主动跳过）不计入，pending（等待数据）算未完成
+  const totalCount = plan.steps.filter(s => s.status !== 'skipped').length;
 
-  if (executedCount === 0) return 0;
-  return successCount / executedCount;
+  if (totalCount === 0) return 0;
+  return successCount / totalCount;
 }
 
 // 创建简单反思结果（不调用LLM）
@@ -109,6 +110,7 @@ function createSimpleReflection(plan: TaskPlan): TaskReflection {
 
   // 基于执行情况生成简单建议
   if (successRate < 1) {
+    // 失败的步骤
     const failedSteps = plan.steps.filter(s => s.status === 'failed');
     failedSteps.forEach(step => {
       if (step.result?.error) {
@@ -116,21 +118,32 @@ function createSimpleReflection(plan: TaskPlan): TaskReflection {
       }
     });
 
-    if (failedSteps.length > 0) {
-      lessonsLearned.push('建议检查输入数据格式是否符合要求');
+    // 未完成的步骤（pending状态，等待数据）
+    const pendingSteps = plan.steps.filter(s => s.status === 'pending');
+    pendingSteps.forEach(step => {
+      improvements.push(`步骤"${step.description}"未完成，需要用户提供数据`);
+    });
+
+    if (failedSteps.length > 0 || pendingSteps.length > 0) {
+      lessonsLearned.push('建议检查输入数据是否齐全');
     }
   }
 
   // 生成总结
   let summary = '';
+  const successCount = plan.steps.filter(s => s.status === 'success').length;
+  const totalCount = plan.steps.filter(s => s.status !== 'skipped').length;
+  const pendingCount = plan.steps.filter(s => s.status === 'pending').length;
+  const failedCount = plan.steps.filter(s => s.status === 'failed').length;
+
   if (successRate === 1) {
     summary = '所有步骤成功完成';
-  } else if (successRate >= 0.8) {
-    summary = '大部分步骤成功完成，少量失败';
-  } else if (successRate >= 0.5) {
-    summary = '部分步骤成功完成';
+  } else if (pendingCount > 0 && failedCount === 0) {
+    summary = `${successCount}/${totalCount}个步骤完成，${pendingCount}个步骤等待数据`;
+  } else if (pendingCount === 0 && failedCount > 0) {
+    summary = `${successCount}/${totalCount}个步骤完成，${failedCount}个步骤失败`;
   } else {
-    summary = '大部分步骤执行失败';
+    summary = `${successCount}/${totalCount}个步骤完成，${failedCount}个失败，${pendingCount}个未完成`;
   }
 
   return {

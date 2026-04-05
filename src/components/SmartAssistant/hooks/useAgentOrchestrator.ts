@@ -265,13 +265,15 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
     plan?: TaskPlan;
     reflection?: TaskReflection;
     executionLog: ExecutionLogEntry[];
+    pendingSteps?: { stepId: string; description: string; prompt: string; intent: IntentType }[];
   }> => {
     setLoading(true);
     setExecutionLog([]);
     setReflection(null);
 
-    // 本地日志数组（同步更新，用于返回值）
+    // 本地变量（同步更新，用于返回值）
     const localExecutionLog: ExecutionLogEntry[] = [];
+    let localReflection: TaskReflection | null = null;  // 新增：本地反思变量
 
     // 本地添加日志函数（同时更新 state 和本地数组）
     const localAddLog = (entry: Omit<ExecutionLogEntry, 'timestamp'>) => {
@@ -299,23 +301,42 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
       let taskPlan: TaskPlan;
 
       if (planningDecision.needsPlanning) {
-        // 复杂任务：需要规划
-        const planningResult = await planner.plan(userInput);
-        taskPlan = {
-          id: uuidv4(),
-          originalQuery: userInput,
-          steps: planningResult.steps,
-          currentStepIndex: 0,
-          status: 'planning',
-          startTime: new Date().toISOString(),
-          shouldReflect: planningResult.requiresReflection
-        };
+        // 检查是否有快速计划（简单工具组合，跳过LLM）
+        if (planningDecision.quickPlan) {
+          taskPlan = {
+            id: uuidv4(),
+            originalQuery: userInput,
+            steps: planningDecision.quickPlan,
+            currentStepIndex: 0,
+            status: 'planning',
+            startTime: new Date().toISOString(),
+            shouldReflect: planningDecision.quickPlan.length > 1
+          };
 
-        localAddLog({
-          phase: 'planning',
-          action: '规划完成',
-          details: `共 ${taskPlan.steps.length} 个步骤`
-        });
+          localAddLog({
+            phase: 'planning',
+            action: '快速规划完成（跳过LLM）',
+            details: `共 ${taskPlan.steps.length} 个步骤`
+          });
+        } else {
+          // 复杂任务：需要LLM规划
+          const planningResult = await planner.plan(userInput);
+          taskPlan = {
+            id: uuidv4(),
+            originalQuery: userInput,
+            steps: planningResult.steps,
+            currentStepIndex: 0,
+            status: 'planning',
+            startTime: new Date().toISOString(),
+            shouldReflect: planningResult.requiresReflection
+          };
+
+          localAddLog({
+            phase: 'planning',
+            action: '规划完成',
+            details: `共 ${taskPlan.steps.length} 个步骤`
+          });
+        }
       } else {
         // 简单任务：直接意图识别
         const intentResult = await intentRecognizer.recognizeIntent(userInput);
@@ -371,6 +392,7 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
       localAddLog({ phase: 'executing', action: '开始执行任务' });
 
       const finalResults: string[] = [];
+      const pendingSteps: { stepId: string; description: string; prompt: string; intent: IntentType }[] = [];
 
       for (let i = 0; i < taskPlan.steps.length; i++) {
         const step = taskPlan.steps[i];
@@ -401,27 +423,34 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
           finalResults.push(stepResult.output);
         }
 
+        // 收集需要数据的步骤（不立即返回，继续执行其他步骤）
+        if (stepResult.needData) {
+          pendingSteps.push({
+            stepId: step.id,
+            description: stepResult.updatedStep.description,
+            prompt: stepResult.output || '请提供数据',
+            intent: step.intent || 'unknown'
+          });
+        }
+
         // 更新计划状态
         setPlan({ ...taskPlan });
       }
 
-      // ===== 反思阶段 =====
-      // 只有复杂任务才进行反思（简单任务跳过）
-      if (taskPlan.shouldReflect && taskPlan.steps.length > 1) {
-        setPhase('reflecting');
-        localAddLog({ phase: 'reflecting', action: '开始任务反思' });
+      // 构建最终输出
+      let finalOutput = finalResults.filter(r => r).join('\n\n');
 
-        taskPlan.status = 'reflecting';
-        setPlan({ ...taskPlan });
-
-        const taskReflection = await taskReflector.reflect(taskPlan);
-        setReflection(taskReflection);
-
-        localAddLog({
-          phase: 'reflecting',
-          action: '反思完成',
-          details: `成功率: ${taskReflection.successRate}`
-        });
+      // 如果有需要数据的步骤，追加自然语言询问
+      if (pendingSteps.length > 0) {
+        if (finalOutput) {
+          finalOutput += '\n\n---\n\n';
+        }
+        if (pendingSteps.length === 1) {
+          finalOutput += `📝 ${pendingSteps[0].prompt}`;
+        } else {
+          const prompts = pendingSteps.map((p, i) => `${i + 1}. ${p.description}: ${p.prompt}`);
+          finalOutput += `📝 需要您提供以下数据：\n${prompts.join('\n')}`;
+        }
       }
 
       // ===== 完成阶段 =====
@@ -437,15 +466,21 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
 
       setLoading(false);
 
-      // 构建最终输出
-      const finalOutput = buildFinalOutput(finalResults);
+      // 反思在后台进行，不阻塞返回（用于"查看详情"）
+      if (taskPlan.shouldReflect && taskPlan.steps.length > 1) {
+        // 不等待反思完成，直接返回结果
+        taskReflector.reflect(taskPlan).then(taskReflection => {
+          setReflection(taskReflection);
+        });
+      }
 
       return {
         success: true,
         result: finalOutput,
         plan: taskPlan,
-        reflection,
-        executionLog: localExecutionLog
+        reflection: localReflection,
+        executionLog: localExecutionLog,
+        pendingSteps  // 新增：返回需要数据的步骤，供后续处理
       };
 
     } catch (error: any) {
@@ -513,6 +548,7 @@ async function executeStep(
   success: boolean;
   output?: string;
   updatedStep: ExecutionStep;
+  needData?: boolean;  // 新增：标记是否需要数据
 }> {
   step.status = 'running';
   step.startTime = new Date().toISOString();
@@ -555,12 +591,12 @@ async function executeStep(
       error: toolResult.error
     };
 
-    // 如果需要更多数据，让用户提供
+    // 如果需要更多数据，标记 needData 让调用方处理
     if (toolResult.needData) {
       addLog({
         phase: 'executing',
         stepId: step.id,
-        action: '等待用户提供数据',
+        action: '需要用户提供数据',
         details: toolResult.dataPrompt
       });
 
@@ -571,7 +607,8 @@ async function executeStep(
           ...step,
           status: 'pending',
           result: lastResult
-        }
+        },
+        needData: true  // 标记需要数据
       };
     }
 

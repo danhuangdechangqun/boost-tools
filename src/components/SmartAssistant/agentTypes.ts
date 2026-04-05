@@ -99,6 +99,7 @@ export interface PlanningDecision {
   needsPlanning: boolean;
   reason: string;
   estimatedSteps: number;
+  quickPlan?: ExecutionStep[];  // 如果是简单工具组合，直接返回计划，跳过LLM
 }
 
 // 规划结果
