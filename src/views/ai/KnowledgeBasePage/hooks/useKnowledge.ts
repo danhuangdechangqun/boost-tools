@@ -18,15 +18,14 @@ export function useKnowledge() {
   const loadDocuments = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await storage.read(DOCUMENTS_KEY);
-      if (data) {
-        const saved = JSON.parse(data);
-        setDocuments(saved);
+      const data = await storage.read<Document[]>(DOCUMENTS_KEY);
+      if (data && Array.isArray(data)) {
+        setDocuments(data);
       }
 
-      const configData = await storage.read(RAG_CONFIG_KEY);
-      if (configData) {
-        setConfig(JSON.parse(configData));
+      const configData = await storage.read<RAGConfig>(RAG_CONFIG_KEY);
+      if (configData && configData.chunkSize) {
+        setConfig(configData);
       }
     } catch (e) {
       console.error('加载文档失败:', e);
@@ -38,7 +37,7 @@ export function useKnowledge() {
   // 保存文档列表
   const saveDocuments = useCallback(async (docs: Document[]) => {
     try {
-      await storage.write(DOCUMENTS_KEY, JSON.stringify(docs));
+      await storage.write(DOCUMENTS_KEY, docs);
     } catch (e) {
       console.error('保存文档失败:', e);
     }
@@ -47,7 +46,7 @@ export function useKnowledge() {
   // 保存配置
   const saveConfig = useCallback(async (newConfig: RAGConfig) => {
     try {
-      await storage.write(RAG_CONFIG_KEY, JSON.stringify(newConfig));
+      await storage.write(RAG_CONFIG_KEY, newConfig);
       setConfig(newConfig);
     } catch (e) {
       console.error('保存配置失败:', e);
