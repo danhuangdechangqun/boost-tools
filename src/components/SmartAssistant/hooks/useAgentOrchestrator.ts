@@ -324,6 +324,8 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
 
       // 如果意图是知识库查询但知识库未就绪
       if (intentResult.type === 'knowledge' && !knowledgeBaseReady) {
+        setLoading(false);
+        setPhase('idle');
         return {
           success: false,
           result: '📚 当前知识库暂无文档，请先导入文档后再提问。',

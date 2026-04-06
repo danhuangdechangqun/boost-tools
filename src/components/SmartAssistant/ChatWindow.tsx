@@ -1,6 +1,6 @@
 // 对话窗口组件 - 集成智能体
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Input, Button, Spin, Tag, Typography } from 'antd';
 import { SendOutlined, ClearOutlined, BulbOutlined, DownOutlined, UpOutlined } from '@ant-design/icons';
 import { Message, ToolResult, IntentType } from './types';
@@ -11,8 +11,25 @@ import { useAgentOrchestrator } from './hooks/useAgentOrchestrator';
 import { message as antMessage } from 'antd';
 import ExecutionDetailDrawer from './components/ExecutionDetailDrawer';
 import { AgentConfig, DEFAULT_AGENT_CONFIG, TaskPlan, TaskReflection, ExecutionLogEntry } from './agentTypes';
+import { storage } from '@/services/storage';
+import { Document } from '@/views/ai/KnowledgeBasePage/types';
 
 const { Paragraph, Text } = Typography;
+
+const DOCUMENTS_KEY = 'knowledge_documents';
+
+// 检查知识库是否有就绪的文档
+async function checkKnowledgeBaseReady(): Promise<boolean> {
+  try {
+    const documents = await storage.read<Document[]>(DOCUMENTS_KEY);
+    if (documents && Array.isArray(documents)) {
+      return documents.some(doc => doc.status === 'ready');
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 // 扩展消息类型，包含智能体执行信息
 interface AgentMessage extends Message {
@@ -32,12 +49,25 @@ interface ChatWindowProps {
 const ChatWindow: React.FC<ChatWindowProps> = ({
   onClose,
   onNavigate,
-  knowledgeBaseReady = false
+  knowledgeBaseReady: externalKnowledgeBaseReady = false
 }) => {
   const [input, setInput] = useState('');
   const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
   const [thinkingDetailExpanded, setThinkingDetailExpanded] = useState(false);
+  const [internalKnowledgeBaseReady, setInternalKnowledgeBaseReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 检测知识库状态
+  useEffect(() => {
+    const checkKB = async () => {
+      const ready = await checkKnowledgeBaseReady();
+      setInternalKnowledgeBaseReady(ready);
+    };
+    checkKB();
+  }, []);
+
+  // 使用外部传入的状态或内部检测的状态
+  const knowledgeBaseReady = externalKnowledgeBaseReady || internalKnowledgeBaseReady;
 
   // 原有的意图识别和工具执行（用于简单任务fallback）
   const { recognizeIntent, loading: intentLoading } = useIntent();
