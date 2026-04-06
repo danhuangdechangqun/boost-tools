@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card, Form, InputNumber, Button, Divider } from 'antd';
-import { RAGConfig, DEFAULT_RAG_CONFIG } from '../types';
+import { RAGConfig } from '../types';
 
 interface ConfigPanelProps {
   config: RAGConfig;
@@ -18,8 +18,15 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ config, onUpdate }) => {
   };
 
   const handleReset = () => {
-    form.setFieldsValue(DEFAULT_RAG_CONFIG);
-    onUpdate(DEFAULT_RAG_CONFIG);
+    const defaults = {
+      chunkSize: 250,
+      chunkOverlap: 50,
+      bigChunkMaxSize: 800,
+      topK: 3,
+      scoreThreshold: 0.7
+    };
+    form.setFieldsValue(defaults);
+    onUpdate(defaults);
   };
 
   return (
@@ -37,6 +44,19 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ config, onUpdate }) => {
         >
           <InputNumber
             min={100}
+            max={2000}
+            step={100}
+            style={{ width: '100%' }}
+          />
+        </Form.Item>
+
+        <Form.Item
+          name="bigChunkMaxSize"
+          label="大片段最大值"
+          tooltip="Big Chunk 最大字符数，超过此大小会再次切分"
+        >
+          <InputNumber
+            min={400}
             max={2000}
             step={100}
             style={{ width: '100%' }}
