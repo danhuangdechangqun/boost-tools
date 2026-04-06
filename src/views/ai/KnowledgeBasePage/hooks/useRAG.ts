@@ -1,9 +1,9 @@
 // RAG检索问答Hook - 使用动态提示词
 
 import { useState, useCallback, useEffect } from 'react';
-import { ChatMessage, SearchResult, Chunk, Document, RAGConfig } from '../types';
+import { ChatMessage, SearchResult, SmallChunk, Document, RAGConfig } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { callLlm } from '@/services/api';
+import { callLlm, getSingleEmbedding, getBatchEmbeddings } from '@/services/api';
 import { promptService } from '@/services/promptService';
 
 // 余弦相似度计算
@@ -25,24 +25,6 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-// 简单的文本嵌入模拟（实际应调用Embedding API）
-// 这里使用简单的哈希向量作为占位符
-function simpleEmbed(text: string): number[] {
-  const vector: number[] = [];
-  const words = text.toLowerCase().split(/\s+/);
-
-  // 创建一个简单的词频向量
-  for (let i = 0; i < 128; i++) {
-    let sum = 0;
-    for (const word of words) {
-      sum += word.charCodeAt(i % word.length) * (i + 1);
-    }
-    vector.push((Math.sin(sum) + 1) / 2); // 归一化到0-1
-  }
-
-  return vector;
-}
-
 export function useRAG() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -62,35 +44,59 @@ export function useRAG() {
     }
   };
 
-  // 检索相关片段
-  const search = useCallback((
+  // 检索相关片段（异步，使用真实 Embedding API）
+  const search = useCallback(async (
     query: string,
-    chunks: Chunk[],
+    smallChunks: SmallChunk[],
     getDocument: (id: string) => Document | undefined,
     config: RAGConfig
-  ): SearchResult[] => {
-    if (chunks.length === 0) return [];
+  ): Promise<SearchResult[]> => {
+    if (smallChunks.length === 0) return [];
 
-    // 生成查询向量
-    const queryEmbedding = simpleEmbed(query);
+    // 生成查询向量（使用 Doubao Embedding）
+    const queryEmbedding = await getSingleEmbedding(query);
 
-    // 计算每个chunk的相似度
+    // 批量获取所有 chunk 的向量（只处理没有 embedding 的）
+    const chunksWithoutEmbedding = smallChunks.filter(c => !c.embedding);
+    const contentsWithoutEmbedding = chunksWithoutEmbedding.map(c => c.content);
+
+    // 批量获取向量
+    const newEmbeddings = contentsWithoutEmbedding.length > 0
+      ? await getBatchEmbeddings(contentsWithoutEmbedding)
+      : [];
+
+    // 将新向量分配给对应 chunk
+    chunksWithoutEmbedding.forEach((chunk, i) => {
+      chunk.embedding = newEmbeddings[i];
+    });
+
+    // 计算每个 chunk 的相似度
     const results: SearchResult[] = [];
 
-    for (const chunk of chunks) {
-      // 如果chunk已有embedding，使用它；否则生成
-      const chunkEmbedding = chunk.embedding || simpleEmbed(chunk.content);
-      const score = cosineSimilarity(queryEmbedding, chunkEmbedding);
+    for (const smallChunk of smallChunks) {
+      if (!smallChunk.embedding) continue;
+
+      const score = cosineSimilarity(queryEmbedding, smallChunk.embedding);
 
       if (score >= config.scoreThreshold) {
-        const doc = getDocument(chunk.documentId);
+        const doc = getDocument(smallChunk.documentId);
         if (doc) {
-          results.push({ chunk, document: doc, score });
+          // 查找关联的 BigChunk
+          const bigChunk = doc.bigChunks?.find(bc => bc.id === smallChunk.bigChunkId);
+
+          results.push({
+            chunk: {
+              ...smallChunk,
+              bigChunkContent: bigChunk?.content
+            } as any,
+            document: doc,
+            score
+          });
         }
       }
     }
 
-    // 按分数排序，返回Top K
+    // 按分数排序，返回 Top K
     return results
       .sort((a, b) => b.score - a.score)
       .slice(0, config.topK);
@@ -99,20 +105,21 @@ export function useRAG() {
   // 生成回答
   const answer = useCallback(async (
     query: string,
-    chunks: Chunk[],
+    smallChunks: SmallChunk[],
     getDocument: (id: string) => Document | undefined,
     config: RAGConfig
   ): Promise<ChatMessage> => {
     setLoading(true);
 
     try {
-      // 检索相关片段
-      const searchResults = search(query, chunks, getDocument, config);
+      // 检索相关片段（异步）
+      const searchResults = await search(query, smallChunks, getDocument, config);
 
-      // 构建上下文
-      const contextParts = searchResults.map((result, i) =>
-        `[片段${i + 1}] (来源: ${result.document.name})\n${result.chunk.content}`
-      );
+      // 构建上下文 - 使用 BigChunk 内容
+      const contextParts = searchResults.map((result, i) => {
+        const bigChunkContent = (result.chunk as any).bigChunkContent || result.chunk.content;
+        return `[片段${i + 1}] (来源: ${result.document.name})\n${bigChunkContent}`;
+      });
       const context = contextParts.join('\n\n---\n\n');
 
       // 使用动态提示词或默认提示词
