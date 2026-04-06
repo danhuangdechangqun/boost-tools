@@ -1,8 +1,8 @@
-// 片段列表组件 - 显示文档切分后的知识片段
+// 片段列表组件 - 显示 BigChunk/SmallChunk 层级结构
 
 import React, { useState } from 'react';
-import { List, Tag, Empty, Modal, Button, message } from 'antd';
-import { Copy } from 'lucide-react';
+import { List, Tag, Empty, Modal, Button, message, Collapse } from 'antd';
+import { Copy, ChevronDown } from 'lucide-react';
 import { SmallChunk, BigChunk } from '../types';
 
 interface ChunkListProps {
@@ -20,28 +20,30 @@ const ChunkList: React.FC<ChunkListProps> = ({
 }) => {
   // 弹窗状态
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedChunk, setSelectedChunk] = useState<SmallChunk | BigChunk | null>(null);
+  const [selectedChunk, setSelectedChunk] = useState<SmallChunk | null>(null);
+  const [selectedBigChunkIndex, setSelectedBigChunkIndex] = useState<number>(0);
 
   // 双击打开弹窗
-  const handleDoubleClick = (chunk: SmallChunk | BigChunk) => {
+  const handleDoubleClick = (chunk: SmallChunk, bigChunkIndex: number) => {
     setSelectedChunk(chunk);
+    setSelectedBigChunkIndex(bigChunkIndex);
     setModalVisible(true);
   };
 
   // 复制内容
-  const handleCopy = () => {
-    if (selectedChunk) {
-      navigator.clipboard.writeText(selectedChunk.content);
-      message.success('内容已复制');
-    }
+  const handleCopy = (content: string) => {
+    navigator.clipboard.writeText(content);
+    message.success('内容已复制');
   };
 
-  // 判断是否是 BigChunk
-  const isBigChunk = (chunk: SmallChunk | BigChunk): chunk is BigChunk => {
-    return 'smallChunks' in chunk;
-  };
+  // 根据 bigChunks 分组展示
+  const groupedChunks = bigChunks?.map((bigChunk, bigIndex) => ({
+    bigChunk,
+    bigIndex,
+    smallChunks: bigChunk.smallChunks
+  })) || [];
 
-  if (chunks.length === 0) {
+  if (!bigChunks || bigChunks.length === 0) {
     return (
       <Empty
         description="暂无片段"
@@ -52,60 +54,87 @@ const ChunkList: React.FC<ChunkListProps> = ({
 
   return (
     <>
-      <List
-        dataSource={chunks}
-        renderItem={(chunk, index) => (
-          <List.Item
-            onClick={() => onSelect?.(chunk)}
-            onDoubleClick={() => handleDoubleClick(chunk)}
-            style={{
-              cursor: 'pointer',
-              background: selectedId === chunk.id ? '#EFF6FF' : 'transparent',
-              borderRadius: 8,
-              padding: '8px 12px',
-              marginBottom: 8,
-              border: '1px solid #E5E7EB',
-              transition: 'all 0.2s'
-            }}
-          >
-            <div style={{ width: '100%' }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                marginBottom: 6
-              }}>
-                <Tag color="blue">片段 {index + 1}</Tag>
-                <span style={{ fontSize: 12, color: '#9CA3AF' }}>
-                  {chunk.content.length} 字符
-                </span>
-                {chunk.embedding && (
-                  <Tag color="green" style={{ fontSize: 10 }}>已向量化</Tag>
-                )}
-                <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 'auto' }}>
-                  双击查看完整
-                </span>
-              </div>
-
-              <div style={{
-                fontSize: 13,
-                color: '#374151',
-                lineHeight: 1.6,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'pre-wrap',
-                background: '#F9FAFB',
-                padding: 8,
-                borderRadius: 4,
-                display: '-webkit-box',
-                WebkitLineClamp: 3,
-                WebkitBoxOrient: 'vertical'
-              }}>
-                {chunk.content}
-              </div>
+      <Collapse
+        defaultActiveKey={bigChunks.map((_, i) => `big-${i}`)}
+        items={groupedChunks.map(({ bigChunk, bigIndex, smallChunks }) => ({
+          key: `big-${bigIndex}`,
+          label: (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Tag color="purple">大片段 {bigIndex + 1}</Tag>
+              <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                {smallChunks.length} 个小片段 · {bigChunk.content.length} 字符
+              </span>
+              <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 'auto' }}>
+                边界: {bigChunk.boundaryType}
+              </span>
             </div>
-          </List.Item>
-        )}
+          ),
+          children: (
+            <List
+              dataSource={smallChunks}
+              renderItem={(chunk, smallIndex) => (
+                <List.Item
+                  onClick={() => onSelect?.(chunk)}
+                  onDoubleClick={() => handleDoubleClick(chunk, bigIndex)}
+                  style={{
+                    cursor: 'pointer',
+                    background: selectedId === chunk.id ? '#EFF6FF' : 'transparent',
+                    borderRadius: 8,
+                    padding: '8px 12px',
+                    marginBottom: 8,
+                    border: '1px solid #E5E7EB',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <div style={{ width: '100%' }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      marginBottom: 6
+                    }}>
+                      <Tag color="blue">小片段 {smallIndex + 1}</Tag>
+                      <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                        {chunk.content.length} 字符
+                      </span>
+                      {chunk.embedding && (
+                        <Tag color="green" style={{ fontSize: 10 }}>已向量化</Tag>
+                      )}
+                      <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 'auto' }}>
+                        双击查看完整
+                      </span>
+                      <Button
+                        size="small"
+                        icon={<Copy size={12} />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopy(chunk.content);
+                        }}
+                      />
+                    </div>
+
+                    <div style={{
+                      fontSize: 13,
+                      color: '#374151',
+                      lineHeight: 1.6,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'pre-wrap',
+                      background: '#F9FAFB',
+                      padding: 8,
+                      borderRadius: 4,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical'
+                    }}>
+                      {chunk.content}
+                    </div>
+                  </div>
+                </List.Item>
+              )}
+            />
+          )
+        }))}
       />
 
       {/* 完整内容弹窗 */}
@@ -115,14 +144,8 @@ const ChunkList: React.FC<ChunkListProps> = ({
         title={
           selectedChunk && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Tag color={isBigChunk(selectedChunk) ? 'purple' : 'blue'}>
-                {isBigChunk(selectedChunk) ? '大片段' : '小片段'}
-              </Tag>
-              <span>
-                {isBigChunk(selectedChunk)
-                  ? `片段 ${selectedChunk.position.index + 1}`
-                  : `片段 ${(selectedChunk as SmallChunk).position.index + 1}`}
-              </span>
+              <Tag color="purple">大片段 {selectedBigChunkIndex + 1}</Tag>
+              <Tag color="blue">小片段 {selectedChunk.position.index + 1}</Tag>
               <span style={{ fontSize: 12, color: '#9CA3AF' }}>
                 ({selectedChunk.content.length} 字符)
               </span>
@@ -130,7 +153,7 @@ const ChunkList: React.FC<ChunkListProps> = ({
           )
         }
         footer={[
-          <Button key="copy" icon={<Copy size={14} />} onClick={handleCopy}>
+          <Button key="copy" icon={<Copy size={14} />} onClick={() => handleCopy(selectedChunk?.content || '')}>
             复制内容
           </Button>,
           <Button key="close" onClick={() => setModalVisible(false)}>
@@ -152,16 +175,14 @@ const ChunkList: React.FC<ChunkListProps> = ({
             }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
                 <span>
-                  位置: 第 {selectedChunk.position.start} - {selectedChunk.position.end} 字符
+                  在大片段中位置: 第 {selectedChunk.position.start} - {selectedChunk.position.end} 字符
                 </span>
                 <span>
-                  片段序号: 第 {selectedChunk.position.index + 1} 个
+                  序号: 大片段{selectedBigChunkIndex + 1}-小片段{selectedChunk.position.index + 1}
                 </span>
-                {!isBigChunk(selectedChunk) && (selectedChunk as SmallChunk).bigChunkId && (
-                  <span>
-                    关联大片段: {(selectedChunk as SmallChunk).bigChunkId.slice(0, 8)}...
-                  </span>
-                )}
+                <span>
+                  所属大片段: 第 {selectedBigChunkIndex + 1} 个 ({bigChunks?.[selectedBigChunkIndex]?.content.length || 0} 字符)
+                </span>
               </div>
             </div>
 

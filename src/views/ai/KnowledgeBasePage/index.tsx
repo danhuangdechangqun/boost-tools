@@ -235,10 +235,6 @@ const KnowledgeBasePage: React.FC<KnowledgeBasePageProps> = ({ onBack }) => {
                             <ChunkList
                               chunks={selectedDoc.bigChunks.flatMap(bc => bc.smallChunks)}
                               bigChunks={selectedDoc.bigChunks}
-                              onSelect={(chunk) => {
-                                navigator.clipboard.writeText(chunk.content);
-                                message.success('片段内容已复制');
-                              }}
                             />
                           </>
                         )}
