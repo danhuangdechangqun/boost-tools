@@ -1,16 +1,26 @@
 // 知识库管理Hook
 
 import { useState, useCallback } from 'react';
-import { Document, Chunk, KnowledgeStats, RAGConfig, DEFAULT_RAG_CONFIG } from '../types';
+import { Document, Chunk, BigChunk, KnowledgeStats, RAGConfig, DEFAULT_RAG_CONFIG } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { storage } from '@/services/storage';
 
 const DOCUMENTS_KEY = 'knowledge_documents';
 const RAG_CONFIG_KEY = 'rag_config';
 
+// 临时切片结果（用于创建BigChunk）
+interface TempChunk {
+  content: string;
+  position: {
+    start: number;
+    end: number;
+    index: number;
+  };
+}
+
 // 文本切片函数
-function chunkText(text: string, chunkSize: number, overlap: number): Omit<Chunk, 'id' | 'documentId' | 'embedding'>[] {
-  const chunks: Omit<Chunk, 'id' | 'documentId' | 'embedding'>[] = [];
+function chunkText(text: string, chunkSize: number, overlap: number): TempChunk[] {
+  const chunks: TempChunk[] = [];
 
   // 按段落分割
   const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
@@ -154,7 +164,7 @@ export function useKnowledge() {
       type,
       size: content.length,
       content,
-      chunks: [],
+      bigChunks: [],
       status: 'pending',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -168,56 +178,88 @@ export function useKnowledge() {
   }, [documents, saveDocuments]);
 
   // 处理文档（切片）
-  const processDocument = useCallback(async (docId: string): Promise<void> => {
-    const doc = documents.find(d => d.id === docId);
-    if (!doc) return;
+  // 可以传入文档对象，避免状态更新延迟导致找不到文档
+  const processDocument = useCallback(async (docId: string, docInput?: Document): Promise<void> => {
+    // 优先使用传入的文档对象，否则从状态中查找
+    const doc = docInput || documents.find(d => d.id === docId);
+    if (!doc) {
+      console.error('找不到文档:', docId);
+      return;
+    }
 
-    // 更新状态为处理中
-    const updatedDocs = documents.map(d =>
-      d.id === docId ? { ...d, status: 'processing' as const } : d
-    );
-    setDocuments(updatedDocs);
-    await saveDocuments(updatedDocs);
+    // 更新状态为处理中（使用函数式更新）
+    setDocuments(prevDocs => {
+      const exists = prevDocs.find(d => d.id === docId);
+      if (exists) {
+        const updatedDocs = prevDocs.map(d =>
+          d.id === docId ? { ...d, status: 'processing' as const } : d
+        );
+        saveDocuments(updatedDocs);
+        return updatedDocs;
+      }
+      // 如果文档不在列表中（新导入），先添加进去
+      const newDocs = [...prevDocs, { ...doc, status: 'processing' as const }];
+      saveDocuments(newDocs);
+      return newDocs;
+    });
 
     try {
-      // 切片
+      // 切片 - 暂时创建简单的BigChunk结构
+      // TODO: Task 2 将实现真正的语义边界识别切分
       const rawChunks = chunkText(doc.content, config.chunkSize, config.chunkOverlap);
 
-      // 创建Chunk对象
-      const chunks: Chunk[] = rawChunks.map(rc => ({
-        id: uuidv4(),
-        documentId: docId,
-        content: rc.content,
-        position: rc.position
-      }));
+      // 创建临时的BigChunk结构（每个chunk作为一个BigChunk，包含一个SmallChunk）
+      const bigChunks: BigChunk[] = rawChunks.map((rc, idx) => {
+        const bigChunkId = uuidv4();
+        return {
+          id: bigChunkId,
+          documentId: docId,
+          content: rc.content,
+          smallChunks: [{
+            id: uuidv4(),
+            documentId: docId,
+            bigChunkId,
+            content: rc.content,
+            position: {
+              start: 0,
+              end: rc.content.length,
+              index: 0
+            }
+          }],
+          position: rc.position,
+          boundaryType: 'paragraph' as const
+        };
+      });
 
-      // 更新文档
-      const finalDocs = documents.map(d =>
-        d.id === docId ? {
-          ...d,
-          chunks,
-          status: 'ready' as const,
-          updatedAt: new Date().toISOString()
-        } : d
-      );
-
-      setDocuments(finalDocs);
-      await saveDocuments(finalDocs);
+      // 使用函数式更新避免闭包问题
+      setDocuments(prevDocs => {
+        const finalDocs = prevDocs.map(d =>
+          d.id === docId ? {
+            ...d,
+            bigChunks,
+            status: 'ready' as const,
+            updatedAt: new Date().toISOString()
+          } : d
+        );
+        saveDocuments(finalDocs);
+        return finalDocs;
+      });
 
     } catch (e: any) {
       // 处理失败
-      const errorDocs = documents.map(d =>
-        d.id === docId ? {
-          ...d,
-          status: 'error' as const,
-          error: e.message || '处理失败'
-        } : d
-      );
-
-      setDocuments(errorDocs);
-      await saveDocuments(errorDocs);
+      setDocuments(prevDocs => {
+        const errorDocs = prevDocs.map(d =>
+          d.id === docId ? {
+            ...d,
+            status: 'error' as const,
+            error: e.message || '处理失败'
+          } : d
+        );
+        saveDocuments(errorDocs);
+        return errorDocs;
+      });
     }
-  }, [documents, config, saveDocuments]);
+  }, [config, saveDocuments]);
 
   // 删除文档
   const deleteDocument = useCallback(async (docId: string) => {
@@ -228,7 +270,8 @@ export function useKnowledge() {
 
   // 获取统计信息
   const getStats = useCallback((): KnowledgeStats => {
-    const chunkCount = documents.reduce((sum, doc) => sum + doc.chunks.length, 0);
+    const chunkCount = documents.reduce((sum, doc) =>
+      sum + doc.bigChunks.reduce((s, bc) => s + bc.smallChunks.length, 0), 0);
     const totalSize = documents.reduce((sum, doc) => sum + doc.size, 0);
 
     return {
@@ -246,7 +289,9 @@ export function useKnowledge() {
 
   // 获取所有chunks（用于检索）
   const getAllChunks = useCallback((): Chunk[] => {
-    return documents.flatMap(doc => doc.chunks);
+    return documents.flatMap(doc =>
+      doc.bigChunks.flatMap(bc => bc.smallChunks)
+    );
   }, [documents]);
 
   // 获取文档内容

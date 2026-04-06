@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card, Button, List, Tag, Progress, Popconfirm, Empty, Spin } from 'antd';
-import { DeleteOutlined, FileTextOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { DeleteOutlined, FileTextOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { Document, DocumentStatus } from '../types';
 
 interface DocumentListProps {
@@ -10,6 +10,7 @@ interface DocumentListProps {
   loading: boolean;
   onDelete: (id: string) => void;
   onSelect: (doc: Document) => void;
+  onProcess?: (id: string) => void;
   selectedId?: string;
 }
 
@@ -33,6 +34,7 @@ const DocumentList: React.FC<DocumentListProps> = ({
   loading,
   onDelete,
   onSelect,
+  onProcess,
   selectedId
 }) => {
   if (loading) {
@@ -95,7 +97,7 @@ const DocumentList: React.FC<DocumentListProps> = ({
 
                   {doc.status === 'ready' && (
                     <span style={{ color: '#6B7280' }}>
-                      {doc.chunks.length} 个片段
+                      {doc.bigChunks.reduce((sum, bc) => sum + bc.smallChunks.length, 0)} 个片段
                     </span>
                   )}
 
@@ -110,6 +112,20 @@ const DocumentList: React.FC<DocumentListProps> = ({
                   </span>
                 </div>
               </div>
+
+              {/* 处理按钮 */}
+              {(doc.status === 'pending' || doc.status === 'error') && onProcess && (
+                <Button
+                  type="link"
+                  icon={<SyncOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onProcess(doc.id);
+                  }}
+                >
+                  处理
+                </Button>
+              )}
 
               <Popconfirm
                 title="确定删除此文档？"

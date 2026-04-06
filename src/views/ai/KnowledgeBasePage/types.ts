@@ -6,6 +6,44 @@ export type DocumentType = 'docx' | 'pdf' | 'md' | 'txt' | 'json';
 // 文档状态
 export type DocumentStatus = 'pending' | 'processing' | 'ready' | 'error';
 
+// 边界识别类型
+export type BoundaryType = 'heading' | 'numbered' | 'newline' | 'paragraph' | 'page';
+
+// SmallChunk - 用于向量检索的小片段
+export interface SmallChunk {
+  id: string;
+  documentId: string;
+  bigChunkId: string;        // 关联的BigChunk ID
+  content: string;
+  embedding?: number[];       // 向量只存储在Small上
+  position: {
+    start: number;           // 在BigChunk中的相对位置
+    end: number;
+    index: number;           // 在BigChunk中的序号
+  };
+  metadata?: {               // 兼容旧数据
+    pageNumber?: number;
+    heading?: string;
+  };
+}
+
+// BigChunk - 语义完整的大片段
+export interface BigChunk {
+  id: string;
+  documentId: string;
+  content: string;           // 完整语义段落内容
+  smallChunks: SmallChunk[]; // 关联的小片段数组
+  position: {
+    start: number;           // 在原文中的起始位置
+    end: number;             // 在原文中的结束位置
+    index: number;           // BigChunk 序号
+  };
+  boundaryType: BoundaryType; // 边界识别类型
+}
+
+// 保留 Chunk 作为兼容类型（指向 SmallChunk）
+export type Chunk = SmallChunk;
+
 // 文档定义
 export interface Document {
   id: string;
@@ -13,28 +51,11 @@ export interface Document {
   type: DocumentType;
   size: number;
   content: string;
-  chunks: Chunk[];
+  bigChunks: BigChunk[];     // 改用 BigChunk 结构
   status: DocumentStatus;
   error?: string;
   createdAt: string;
   updatedAt: string;
-}
-
-// 文本片段
-export interface Chunk {
-  id: string;
-  documentId: string;
-  content: string;
-  embedding?: number[];
-  position: {
-    start: number;
-    end: number;
-    index: number;
-  };
-  metadata?: {
-    pageNumber?: number;
-    heading?: string;
-  };
 }
 
 // 搜索结果
@@ -63,16 +84,18 @@ export interface KnowledgeStats {
 
 // RAG配置
 export interface RAGConfig {
-  chunkSize: number;
-  chunkOverlap: number;
+  chunkSize: number;         // Small Chunk 大小
+  chunkOverlap: number;      // Small Chunk overlap
+  bigChunkMaxSize: number;   // Big Chunk 最大大小（新增）
   topK: number;
   scoreThreshold: number;
 }
 
 // 默认RAG配置
 export const DEFAULT_RAG_CONFIG: RAGConfig = {
-  chunkSize: 500,
+  chunkSize: 250,            // Small Chunk 大小（从500改为250）
   chunkOverlap: 50,
+  bigChunkMaxSize: 800,      // 新增：Big Chunk 最大大小
   topK: 3,
   scoreThreshold: 0.7
 };

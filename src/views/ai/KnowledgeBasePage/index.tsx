@@ -10,7 +10,8 @@ import ImportModal from './components/ImportModal';
 import ChatPanel from './components/ChatPanel';
 import SourceCard from './components/SourceCard';
 import ConfigPanel from './components/ConfigPanel';
-import { Document, SearchResult, DocumentType } from './types';
+import ChunkList from './components/ChunkList';
+import { Document, SearchResult, DocumentType, Chunk } from './types';
 
 interface KnowledgeBasePageProps {
   onBack: () => void;
@@ -57,9 +58,9 @@ const KnowledgeBasePage: React.FC<KnowledgeBasePageProps> = ({ onBack }) => {
       const doc = await addDocument(name, type, content);
       message.success('文档已添加，正在处理...');
 
-      // 自动处理文档
+      // 自动处理文档，传入文档对象避免状态延迟
       setProcessing(true);
-      await processDocument(doc.id);
+      await processDocument(doc.id, doc);
       setProcessing(false);
       message.success('文档处理完成');
     } catch (e: any) {
@@ -85,6 +86,19 @@ const KnowledgeBasePage: React.FC<KnowledgeBasePageProps> = ({ onBack }) => {
 
     // 添加助手消息
     addAssistantMessage(answerMsg);
+  };
+
+  // 处理文档（切片）
+  const handleProcess = async (docId: string) => {
+    setProcessing(true);
+    try {
+      await processDocument(docId);
+      message.success('文档处理完成');
+    } catch (e: any) {
+      message.error('处理失败: ' + e.message);
+    } finally {
+      setProcessing(false);
+    }
   };
 
   // 删除文档
@@ -169,6 +183,7 @@ const KnowledgeBasePage: React.FC<KnowledgeBasePageProps> = ({ onBack }) => {
                         documents={documents}
                         loading={loading}
                         onDelete={handleDeleteDoc}
+                        onProcess={handleProcess}
                         onSelect={setSelectedDoc}
                         selectedId={selectedDoc?.id}
                       />
@@ -202,30 +217,37 @@ const KnowledgeBasePage: React.FC<KnowledgeBasePageProps> = ({ onBack }) => {
 
                     {/* 文档详情 */}
                     {selectedDoc && (
-                      <Card size="small" title="文档详情">
+                      <Card size="small" title="文档详情" style={{ maxHeight: 400, overflow: 'auto' }}>
                         <div style={{ marginBottom: 8 }}>
                           <strong>{selectedDoc.name}</strong>
                         </div>
                         <div style={{ fontSize: 12, color: '#6B7280' }}>
                           <div>类型: {selectedDoc.type.toUpperCase()}</div>
                           <div>大小: {(selectedDoc.size / 1024).toFixed(1)} KB</div>
-                          <div>片段: {selectedDoc.chunks.length} 条</div>
+                          <div>片段: {selectedDoc.bigChunks.reduce((sum, bc) => sum + bc.smallChunks.length, 0)} 条</div>
                           <div>创建: {new Date(selectedDoc.createdAt).toLocaleString()}</div>
                         </div>
 
-                        <Divider style={{ margin: '12px 0' }} />
+                        {selectedDoc.bigChunks.length > 0 && (
+                          <>
+                            <Divider style={{ margin: '12px 0' }}>知识片段</Divider>
+                            <ChunkList
+                              chunks={selectedDoc.bigChunks.flatMap(bc => bc.smallChunks)}
+                              onSelect={(chunk) => {
+                                // 点击片段可以复制内容
+                                navigator.clipboard.writeText(chunk.content);
+                                message.success('片段内容已复制');
+                              }}
+                            />
+                          </>
+                        )}
 
-                        <div style={{
-                          maxHeight: 200,
-                          overflow: 'auto',
-                          background: '#F9FAFB',
-                          padding: 8,
-                          borderRadius: 6,
-                          fontSize: 12,
-                          fontFamily: 'monospace'
-                        }}>
-                          {selectedDoc.content.slice(0, 500)}...
-                        </div>
+                        {selectedDoc.bigChunks.length === 0 && selectedDoc.status === 'ready' && (
+                          <Empty
+                            description="文档尚未切片"
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                          />
+                        )}
                       </Card>
                     )}
                   </div>
