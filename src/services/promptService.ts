@@ -204,7 +204,7 @@ export const DEFAULT_PROMPTS: PromptDefinition[] = [
     id: 'rag_answer',
     name: 'RAG问答',
     description: '基于知识库回答用户问题',
-    category: '知识库+RAG',
+    category: '知识库',
     template: `你是一个智能助手，需要基于知识库回答用户问题。
 
 以下是与问题相关的知识片段：
@@ -435,12 +435,11 @@ export const promptService = {
   // 获取所有提示词
   async getAll(): Promise<PromptDefinition[]> {
     try {
-      const data = await storage.read(PROMPTS_STORAGE_KEY);
-      if (data) {
-        const saved = JSON.parse(data);
+      const saved = await storage.read<PromptDefinition[]>(PROMPTS_STORAGE_KEY);
+      if (saved && Array.isArray(saved)) {
         // 合并默认提示词和保存的提示词（保存的覆盖默认的）
         const merged = DEFAULT_PROMPTS.map(def => {
-          const savedItem = saved.find((s: PromptDefinition) => s.id === def.id);
+          const savedItem = saved.find((s) => s.id === def.id);
           return savedItem || def;
         });
         return merged;
@@ -463,7 +462,7 @@ export const promptService = {
     const index = all.findIndex(p => p.id === id);
     if (index >= 0) {
       all[index] = { ...all[index], template };
-      await storage.write(PROMPTS_STORAGE_KEY, JSON.stringify(all));
+      await storage.write(PROMPTS_STORAGE_KEY, all);
     }
   },
 
@@ -476,13 +475,13 @@ export const promptService = {
       if (index >= 0) {
         all[index] = defaultPrompt;
       }
-      await storage.write(PROMPTS_STORAGE_KEY, JSON.stringify(all));
+      await storage.write(PROMPTS_STORAGE_KEY, all);
     }
   },
 
   // 重置所有提示词
   async resetAll(): Promise<void> {
-    await storage.write(PROMPTS_STORAGE_KEY, JSON.stringify(DEFAULT_PROMPTS));
+    await storage.write(PROMPTS_STORAGE_KEY, DEFAULT_PROMPTS);
   },
 
   // 渲染提示词（替换变量）
