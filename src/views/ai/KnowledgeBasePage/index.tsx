@@ -134,7 +134,7 @@ const KnowledgeBasePage: React.FC<KnowledgeBasePageProps> = ({ onBack }) => {
         </Button>
 
         <h3 style={{ flex: 1, margin: 0, fontWeight: 600 }}>
-          知识库 + RAG系统
+          知识库
         </h3>
 
         <Button
@@ -224,7 +224,8 @@ const KnowledgeBasePage: React.FC<KnowledgeBasePageProps> = ({ onBack }) => {
                         <div style={{ fontSize: 12, color: '#6B7280' }}>
                           <div>类型: {selectedDoc.type.toUpperCase()}</div>
                           <div>大小: {(selectedDoc.size / 1024).toFixed(1)} KB</div>
-                          <div>片段: {selectedDoc.bigChunks.reduce((sum, bc) => sum + bc.smallChunks.length, 0)} 条</div>
+                          <div>大片段: {selectedDoc.bigChunks?.length || 0} 个</div>
+                          <div>小片段: {selectedDoc.bigChunks?.reduce((s, bc) => s + bc.smallChunks.length, 0) || 0} 条</div>
                           <div>创建: {new Date(selectedDoc.createdAt).toLocaleString()}</div>
                         </div>
 
@@ -233,8 +234,8 @@ const KnowledgeBasePage: React.FC<KnowledgeBasePageProps> = ({ onBack }) => {
                             <Divider style={{ margin: '12px 0' }}>知识片段</Divider>
                             <ChunkList
                               chunks={selectedDoc.bigChunks.flatMap(bc => bc.smallChunks)}
+                              bigChunks={selectedDoc.bigChunks}
                               onSelect={(chunk) => {
-                                // 点击片段可以复制内容
                                 navigator.clipboard.writeText(chunk.content);
                                 message.success('片段内容已复制');
                               }}
