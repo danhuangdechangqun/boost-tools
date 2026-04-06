@@ -31,6 +31,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api\/anthropic/, '/apps/anthropic')
       },
+      // 阿里云 DashScope Embedding
+      '/api/dashscope': {
+        target: 'https://dashscope.aliyuncs.com',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/dashscope/, '')
+      },
       // OpenAI
       '/api/openai': {
         target: 'https://api.openai.com',

@@ -1,6 +1,10 @@
 // 阿里云 DashScope Embedding 服务
+// 开发环境通过 Vite 代理调用，生产环境直接调用
 
-const DASHSCOPE_EMBEDDING_API = 'https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding';
+const isDev = import.meta.env.DEV;
+const DASHSCOPE_EMBEDDING_API = isDev
+  ? '/api/dashscope/api/v1/services/embeddings/text-embedding/text-embedding'
+  : 'https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding';
 const DASHSCOPE_API_KEY = 'sk-c0971e3f52ab4981bcbc5385192999e9';
 const DASHSCOPE_EMBEDDING_MODEL = 'text-embedding-v3';
 
