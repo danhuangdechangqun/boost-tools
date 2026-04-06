@@ -203,3 +203,22 @@ export const TOOL_REGISTRY: Record<IntentType, ToolDefinition> = {
     handler: 'handleUnknown'
   }
 };
+
+// 意图路由结果 - 用于入口拦截判断
+export interface IntentRouterResult {
+  type: 'tool' | 'knowledge' | 'clarify';
+  tool?: IntentType;           // 工具名（type='tool'时有效）
+  confidence?: number;         // 置信度
+  needConfirm?: boolean;       // 是否需要用户确认
+  message?: string;            // 引导提示语（type='clarify'时有效）
+  knowledgeScore?: number;     // 知识库相似度分数（type='knowledge'时有效）
+}
+
+// 意图路由配置 - 开发模式可调整
+export interface IntentRouterConfig {
+  toolConfidenceThreshold: number;  // 工具匹配阈值，默认 0.8
+}
+
+export const DEFAULT_INTENT_ROUTER_CONFIG: IntentRouterConfig = {
+  toolConfidenceThreshold: 0.8
+};
