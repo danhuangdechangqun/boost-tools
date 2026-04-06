@@ -94,8 +94,33 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       return;
     }
 
+    // 检测用户是否在纠错（如："不对，我要调用uuid工具"）
+    const lastAssistantMsg = agentMessages.length > 0
+      ? agentMessages[agentMessages.length - 1]
+      : null;
+    const isCorrection = lastAssistantMsg?.role === 'assistant' &&
+      (text.includes('不对') || text.includes('我要调用') || text.includes('查知识库') || text.includes('调用'));
+
+    // 构建执行上下文
+    let executionContext: any = undefined;
+
+    if (isCorrection) {
+      // 解析用户纠错意图
+      if (text.includes('查知识库') || text.includes('知识库')) {
+        executionContext = { explicitIntent: 'knowledge' };
+      } else {
+        // 尝试提取工具名
+        const toolMatch = text.match(/调用\s*(\w+)\s*工具/i) ||
+                         text.match(/用\s*(\w+)/i) ||
+                         text.match(/我要(\w+)/i);
+        if (toolMatch) {
+          executionContext = { explicitIntent: 'tool', explicitTool: toolMatch[1].toLowerCase() };
+        }
+      }
+    }
+
     // 使用智能体执行
-    const agentResult = await agent.execute(text, knowledgeBaseReady);
+    const agentResult = await agent.execute(text, knowledgeBaseReady, executionContext);
 
     // 添加助手消息（包含执行信息）
     const assistantMsg: AgentMessage = {
