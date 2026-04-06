@@ -1,27 +1,25 @@
-// Doubao Embedding 服务
+// 阿里云 DashScope Embedding 服务
 
-const DOUBAO_EMBEDDING_API = 'https://ark.cn-beijing.volces.com/api/v3/embeddings';
-const DOUBAO_API_KEY = '3cedbda2-bb5b-4ffc-b49a-19afdf86d8f9';
-// 更新为有效的 Embedding 模型名称
-const DOUBAO_EMBEDDING_MODEL = 'doubao-embedding-large-text-240915';
+const DASHSCOPE_EMBEDDING_API = 'https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding';
+const DASHSCOPE_API_KEY = 'sk-c0971e3f52ab4981bcbc5385192999e9';
+const DASHSCOPE_EMBEDDING_MODEL = 'text-embedding-v3';
 
-interface EmbeddingResponse {
-  id: string;
-  model: string;
-  object: string;
-  data: {
-    embedding: number[];
-    index: number;
-    object: string;
-  }[];
+interface DashScopeEmbeddingResponse {
+  output: {
+    embeddings: {
+      text_index: number;
+      embedding: number[];
+    }[];
+  };
   usage: {
-    prompt_tokens: number;
     total_tokens: number;
   };
+  code?: string;
+  message?: string;
 }
 
 /**
- * 调用 Doubao Embedding API 获取文本向量
+ * 调用阿里云 DashScope Embedding API 获取文本向量
  * @param texts 文本数组（单条或多条）
  * @returns 向量数组
  */
@@ -30,16 +28,20 @@ export async function getEmbedding(texts: string | string[]): Promise<number[][]
   const input = Array.isArray(texts) ? texts : [texts];
 
   try {
-    const response = await fetch(DOUBAO_EMBEDDING_API, {
+    const response = await fetch(DASHSCOPE_EMBEDDING_API, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DOUBAO_API_KEY}`
+        'Authorization': `Bearer ${DASHSCOPE_API_KEY}`
       },
       body: JSON.stringify({
-        model: DOUBAO_EMBEDDING_MODEL,
-        input,
-        encoding_format: 'float'
+        model: DASHSCOPE_EMBEDDING_MODEL,
+        input: {
+          texts: input
+        },
+        parameters: {
+          text_type: 'query'  // query 用于检索，document 用于入库
+        }
       })
     });
 
@@ -48,11 +50,16 @@ export async function getEmbedding(texts: string | string[]): Promise<number[][]
       throw new Error(`Embedding API 调用失败: ${response.status} ${errorText}`);
     }
 
-    const data: EmbeddingResponse = await response.json();
+    const data: DashScopeEmbeddingResponse = await response.json();
 
-    // 按 index 排序返回向量
-    return data.data
-      .sort((a, b) => a.index - b.index)
+    // 检查是否有错误
+    if (data.code && data.code !== 'Success') {
+      throw new Error(`Embedding API 错误: ${data.message}`);
+    }
+
+    // 按 text_index 排序返回向量
+    return data.output.embeddings
+      .sort((a, b) => a.text_index - b.text_index)
       .map(item => item.embedding);
   } catch (error) {
     console.error('Embedding 调用错误:', error);
@@ -71,7 +78,7 @@ export async function getSingleEmbedding(text: string): Promise<number[]> {
 /**
  * 批量获取向量（支持分批处理，避免单次请求过大）
  * @param texts 文本数组
- * @param batchSize 每批数量（默认4，Doubao建议不超过4条）
+ * @param batchSize 每批数量（默认4）
  */
 export async function getBatchEmbeddings(
   texts: string[],
