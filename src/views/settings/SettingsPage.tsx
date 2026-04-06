@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Button, Input, Card, Form, message, Spin, Select, Switch } from 'antd';
+import { Button, Input, Card, Form, message, Spin, Select, Switch, InputNumber } from 'antd';
 import { ArrowLeft, Save, Server, FileText } from 'lucide-react';
 import { getConfig, setConfig, testLlmConnection, AppConfig } from '@/services/api';
+import { IntentRouterConfig, DEFAULT_INTENT_ROUTER_CONFIG } from '@/components/SmartAssistant/types';
 
 interface SettingsPageProps {
   onBack: () => void;
@@ -105,6 +106,17 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, onNavigate }) => {
           format: config.weeklyReport?.format || 'markdown'
         }
       });
+
+      // 加载意图路由配置（从localStorage）
+      const savedRouterConfig = localStorage.getItem('intentRouterConfig');
+      if (savedRouterConfig) {
+        try {
+          const routerConfig = JSON.parse(savedRouterConfig);
+          form.setFieldsValue({
+            intentRouter: routerConfig
+          });
+        } catch {}
+      }
     } catch (e) {
       message.error('加载配置失败');
     }
@@ -134,6 +146,13 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, onNavigate }) => {
       }
     };
     await setConfig(config);
+
+    // 保存意图路由配置
+    const routerConfig: IntentRouterConfig = {
+      toolConfidenceThreshold: values.intentRouter?.toolConfidenceThreshold || DEFAULT_INTENT_ROUTER_CONFIG.toolConfidenceThreshold
+    };
+    localStorage.setItem('intentRouterConfig', JSON.stringify(routerConfig));
+
     message.success('保存成功');
   };
 
@@ -382,6 +401,31 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, onNavigate }) => {
                 </div>
                 <FileText size={24} color="#3B82F6" />
               </div>
+            </Card>
+          )}
+
+          {import.meta.env.DEV && (
+            <Card title="置信度配置" style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 16 }}>
+                仅开发模式可见，用于调整意图判断的置信度阈值
+              </p>
+              <Form.Item
+                name={['intentRouter', 'toolConfidenceThreshold']}
+                label="工具匹配阈值"
+                tooltip="LLM判断为工具时，置信度需达到此阈值才会执行"
+                initialValue={DEFAULT_INTENT_ROUTER_CONFIG.toolConfidenceThreshold}
+              >
+                <InputNumber
+                  min={0.5}
+                  max={1}
+                  step={0.1}
+                  precision={1}
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+              <p style={{ fontSize: 12, color: '#9CA3AF' }}>
+                知识库阈值复用知识库页面的配置，不单独设置
+              </p>
             </Card>
           )}
 
