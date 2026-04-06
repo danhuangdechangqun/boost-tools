@@ -7,6 +7,10 @@ export interface AppConfig {
     model: string;
     format: 'openai';
   };
+  embedding: {
+    apiKey: string;
+    model: string;
+  };
   shortcut: {
     key: string;
     enabled: boolean;

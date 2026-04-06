@@ -91,6 +91,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, onNavigate }) => {
           model: config.llm?.model || '',
           format: config.llm?.format || 'openai'
         },
+        embedding: {
+          apiKey: config.embedding?.apiKey || '',
+          model: config.embedding?.model || 'text-embedding-v3'
+        },
         shortcut: {
           key: config.shortcut?.key || 'Ctrl+Shift+B',
           enabled: config.shortcut?.enabled ?? true
@@ -114,6 +118,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, onNavigate }) => {
         apiKey: values.llm?.apiKey || '',
         model: values.llm?.model || '',
         format: values.llm?.format || 'openai'
+      },
+      embedding: {
+        apiKey: values.embedding?.apiKey || '',
+        model: values.embedding?.model || 'text-embedding-v3'
       },
       shortcut: {
         key: values.shortcut?.key || 'Ctrl+Shift+B',
@@ -161,6 +169,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, onNavigate }) => {
           apiKey: apiKey,
           model: model,
           format: values.llm?.format || 'openai'
+        },
+        embedding: {
+          apiKey: values.embedding?.apiKey || '',
+          model: values.embedding?.model || 'text-embedding-v3'
         },
         shortcut: {
           key: values.shortcut?.key || 'Ctrl+Shift+B',
@@ -277,6 +289,18 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, onNavigate }) => {
             </Form.Item>
             <Button icon={<Server size={14} />} onClick={testConnection} loading={testing} style={{ marginRight: 8 }}>测试连接</Button>
             <span style={{ fontSize: 12, color: '#6B7280' }}>测试前会自动保存配置</span>
+          </Card>
+
+          <Card title="向量模型配置" style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 16 }}>
+              用于知识库的文本向量化，推荐使用阿里云 DashScope text-embedding-v3
+            </p>
+            <Form.Item name={['embedding', 'model']} label="向量模型">
+              <Input placeholder="如: text-embedding-v3" />
+            </Form.Item>
+            <Form.Item name={['embedding', 'apiKey']} label="API Key">
+              <Input.Password placeholder="输入向量模型的API密钥" />
+            </Form.Item>
           </Card>
 
           <Card title="快捷键设置" style={{ marginBottom: 16 }}>

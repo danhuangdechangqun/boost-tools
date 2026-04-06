@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { TodoItem, NoteItem, PasswordItem, PromptItem, AppConfig, LLMResponse } from '@/types';
 import { initStorage as initStorageService, getConfig as storageGetConfig, setConfig as storageSetConfig, getTodos as storageGetTodos, setTodos as storageSetTodos, getNotes as storageGetNotes, setNotes as storageSetNotes, getPasswords as storageGetPasswords, setPasswords as storageSetPasswords, getPrompts as storageGetPrompts, setPrompts as storageSetPrompts } from './storage';
 import { callLlm as llmCall, testLlmConnection as llmTestConnection, initLLM as llmInit, updateLLMConfig } from './llm';
+import { clearEmbeddingConfigCache } from './embedding';
 
 // 类型导出
 export type { AppConfig, TodoItem, NoteItem, PasswordItem, PromptItem, LLMResponse } from '@/types';
@@ -24,6 +25,8 @@ export const setConfig = async (config: AppConfig) => {
   if (config.llm) {
     updateLLMConfig(config.llm);
   }
+  // 清除 Embedding 配置缓存
+  clearEmbeddingConfigCache();
 };
 
 // Todo操作

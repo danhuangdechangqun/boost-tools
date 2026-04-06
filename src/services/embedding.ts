@@ -1,12 +1,41 @@
 // 阿里云 DashScope Embedding 服务
-// 开发环境通过 Vite 代理调用，生产环境直接调用
+// API Key 和模型名从配置中读取
 
-const isDev = import.meta.env.DEV;
-const DASHSCOPE_EMBEDDING_API = isDev
-  ? '/api/dashscope/api/v1/services/embeddings/text-embedding/text-embedding'
-  : 'https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding';
-const DASHSCOPE_API_KEY = 'sk-c0971e3f52ab4981bcbc5385192999e9';
-const DASHSCOPE_EMBEDDING_MODEL = 'text-embedding-v3';
+import { getConfig } from './api';
+
+// 默认模型名（配置为空时使用）
+const DEFAULT_EMBEDDING_MODEL = 'text-embedding-v3';
+
+// 缓存配置，避免频繁读取
+let cachedConfig: { apiKey: string; model: string } | null = null;
+
+/**
+ * 获取 Embedding 配置
+ */
+async function getEmbeddingConfig(): Promise<{ apiKey: string; model: string }> {
+  if (cachedConfig) {
+    return cachedConfig;
+  }
+
+  try {
+    const config = await getConfig();
+    cachedConfig = {
+      apiKey: config.embedding?.apiKey || '',
+      model: config.embedding?.model || DEFAULT_EMBEDDING_MODEL
+    };
+    return cachedConfig;
+  } catch (e) {
+    console.error('获取 Embedding 配置失败:', e);
+    return { apiKey: '', model: DEFAULT_EMBEDDING_MODEL };
+  }
+}
+
+/**
+ * 清除配置缓存（配置更新后调用）
+ */
+export function clearEmbeddingConfigCache() {
+  cachedConfig = null;
+}
 
 interface DashScopeEmbeddingResponse {
   output: {
@@ -31,15 +60,28 @@ export async function getEmbedding(texts: string | string[]): Promise<number[][]
   // 确保输入是数组
   const input = Array.isArray(texts) ? texts : [texts];
 
+  // 从配置获取 API Key 和模型
+  const { apiKey, model } = await getEmbeddingConfig();
+
+  if (!apiKey) {
+    throw new Error('未配置向量模型 API Key，请在设置中配置');
+  }
+
+  // 开发环境通过 Vite 代理，生产环境直接调用
+  const isDev = import.meta.env.DEV;
+  const apiUrl = isDev
+    ? '/api/dashscope/api/v1/services/embeddings/text-embedding/text-embedding'
+    : 'https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding';
+
   try {
-    const response = await fetch(DASHSCOPE_EMBEDDING_API, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DASHSCOPE_API_KEY}`
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: DASHSCOPE_EMBEDDING_MODEL,
+        model: model,
         input: {
           texts: input
         },
