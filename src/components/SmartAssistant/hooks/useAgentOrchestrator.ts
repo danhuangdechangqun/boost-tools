@@ -2,12 +2,13 @@
 
 import { useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { IntentResult, IntentType } from '../types';
+import { IntentResult, IntentType, IntentRouterResult } from '../types';
 import { usePlanner } from './usePlanner';
 import { useStepReflector } from './useStepReflector';
 import { useTaskReflector } from './useTaskReflector';
 import { useToolExecutor } from './useToolExecutor';
 import { useIntent } from './useIntent';
+import { useIntentRouter } from './useIntentRouter';
 import {
   TaskPlan,
   ExecutionStep,
@@ -245,6 +246,7 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
   const taskReflector = useTaskReflector(config);
   const toolExecutor = useToolExecutor();
   const intentRecognizer = useIntent();
+  const intentRouter = useIntentRouter();
 
   // 添加执行日志
   const addLog = useCallback((entry: Omit<ExecutionLogEntry, 'timestamp'>) => {
@@ -258,7 +260,16 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
   // 执行完整智能体流程
   const execute = useCallback(async (
     userInput: string,
-    knowledgeBaseReady: boolean = false
+    knowledgeBaseReady: boolean = false,
+    context?: {
+      explicitIntent?: 'tool' | 'knowledge';
+      explicitTool?: string;
+      knowledgeContext?: {
+        smallChunks: any[];
+        getDocument: (id: string) => any;
+        scoreThreshold: number;
+      };
+    }
   ): Promise<{
     success: boolean;
     result?: string;
@@ -266,6 +277,7 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
     reflection?: TaskReflection;
     executionLog: ExecutionLogEntry[];
     pendingSteps?: { stepId: string; description: string; prompt: string; intent: IntentType }[];
+    intentRouterResult?: IntentRouterResult;
   }> => {
     setLoading(true);
     setExecutionLog([]);
@@ -285,7 +297,41 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
       setExecutionLog(prev => [...prev, logEntry]);
     };
 
+    // 意图路由结果（用于错误处理时返回）
+    let intentResult: IntentRouterResult | undefined;
+
     try {
+      // ===== 意图路由拦截 =====
+      intentResult = await intentRouter.routeIntent(userInput, context?.knowledgeContext);
+
+      localAddLog({
+        phase: 'planning',
+        action: '意图路由完成',
+        details: `type: ${intentResult.type}, tool: ${intentResult.tool || 'none'}, confidence: ${intentResult.confidence || 0}`
+      });
+
+      // 如果需要澄清，直接返回引导提示
+      if (intentResult.type === 'clarify') {
+        setLoading(false);
+        setPhase('idle');
+        return {
+          success: false,
+          result: intentResult.message || '请明确告诉我你要做什么。',
+          executionLog: localExecutionLog,
+          intentRouterResult: intentResult
+        };
+      }
+
+      // 如果意图是知识库查询但知识库未就绪
+      if (intentResult.type === 'knowledge' && !knowledgeBaseReady) {
+        return {
+          success: false,
+          result: '📚 当前知识库暂无文档，请先导入文档后再提问。',
+          executionLog: localExecutionLog,
+          intentRouterResult: intentResult
+        };
+      }
+
       // ===== 规划阶段 =====
       setPhase('planning');
       localAddLog({ phase: 'planning', action: '开始规划任务' });
@@ -480,7 +526,8 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
         plan: taskPlan,
         reflection: localReflection,
         executionLog: localExecutionLog,
-        pendingSteps  // 新增：返回需要数据的步骤，供后续处理
+        pendingSteps,  // 新增：返回需要数据的步骤，供后续处理
+        intentRouterResult: intentResult
       };
 
     } catch (error: any) {
@@ -498,10 +545,11 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
       return {
         success: false,
         result: `执行出错: ${error.message}`,
-        executionLog: localExecutionLog
+        executionLog: localExecutionLog,
+        intentRouterResult: intentResult
       };
     }
-  }, [config, planner, stepReflector, taskReflector, toolExecutor, intentRecognizer]);
+  }, [config, planner, stepReflector, taskReflector, toolExecutor, intentRecognizer, intentRouter]);
 
   // 获取当前状态
   const getStatus = useCallback(() => {
