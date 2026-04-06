@@ -5,6 +5,7 @@ import { ToolResult, IntentType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import CryptoJS from 'crypto-js';
 import { addTodo, TodoItem } from '@/services/api';
+import { queryKnowledge } from '@/services/knowledgeQuery';
 
 // 格式化JSON
 function formatJSON(data: string): { success: boolean; result?: string; error?: string } {
@@ -263,7 +264,7 @@ export function useToolExecutor() {
           return handleRegex(params.pattern || params.data);
 
         case 'knowledge':
-          return handleKnowledge(knowledgeBaseReady);
+          return handleKnowledge(params.data);
 
         case 'text_diff':
           return handleTextDiff();
@@ -441,19 +442,35 @@ function handleRegex(pattern?: string): ToolResult {
   };
 }
 
-function handleKnowledge(ready: boolean): ToolResult {
-  if (!ready) {
+async function handleKnowledge(query?: string): Promise<ToolResult> {
+  if (!query) {
     return {
-      success: false,
-      error: '📚 当前知识库暂无文档，请先导入文档后再提问。',
+      success: true,
+      needData: true,
+      dataPrompt: '请输入您的问题，我将根据知识库回答',
       linkTo: 'knowledge-base',
-      linkText: '前往导入文档'
+      linkText: '打开知识库'
     };
   }
+
+  // 执行知识库查询
+  const result = await queryKnowledge(query);
+
+  if (!result.success) {
+    return {
+      success: false,
+      error: result.error,
+      linkTo: 'knowledge-base',
+      linkText: '打开知识库'
+    };
+  }
+
   return {
     success: true,
-    needData: true,
-    dataPrompt: '请输入您的问题，我将根据知识库回答'
+    data: result.answer,
+    summary: result.sources?.length
+      ? `参考了 ${result.sources.length} 个知识片段`
+      : undefined
   };
 }
 

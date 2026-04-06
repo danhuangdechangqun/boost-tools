@@ -334,6 +334,72 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
         };
       }
 
+      // 如果意图明确是工具或知识库，直接创建执行计划
+      if (intentResult.type === 'tool' || intentResult.type === 'knowledge') {
+        const toolName = intentResult.type === 'tool' ? intentResult.tool! : 'knowledge';
+
+        // 直接创建单步执行计划
+        const taskPlan: TaskPlan = {
+          id: uuidv4(),
+          originalQuery: userInput,
+          steps: [{
+            id: 'step_1',
+            description: `执行${toolName}任务`,
+            intent: toolName,
+            toolCall: {
+              tool: toolName,
+              params: { data: userInput }  // 直接传入用户输入
+            },
+            retryCount: 0,
+            status: 'pending'
+          }],
+          currentStepIndex: 0,
+          status: 'planning',
+          startTime: new Date().toISOString(),
+          shouldReflect: false
+        };
+
+        setPlan(taskPlan);
+        taskPlan.status = 'executing';
+
+        // ===== 执行阶段 =====
+        setPhase('executing');
+        localAddLog({ phase: 'executing', action: '开始执行任务' });
+
+        const step = taskPlan.steps[0];
+        const stepResult = await executeStep(
+          step,
+          taskPlan,
+          toolExecutor,
+          stepReflector,
+          knowledgeBaseReady,
+          config,
+          localAddLog
+        );
+
+        taskPlan.steps[0] = stepResult.updatedStep;
+        setPlan({ ...taskPlan });
+
+        // ===== 完成阶段 =====
+        setPhase('completed');
+        taskPlan.status = 'completed';
+        taskPlan.endTime = new Date().toISOString();
+        setLoading(false);
+
+        localAddLog({
+          phase: 'completed',
+          action: '任务完成'
+        });
+
+        return {
+          success: stepResult.success,
+          result: stepResult.output || (stepResult.needData ? stepResult.output : '执行完成'),
+          plan: taskPlan,
+          executionLog: localExecutionLog,
+          intentRouterResult: intentResult
+        };
+      }
+
       // ===== 规划阶段 =====
       setPhase('planning');
       localAddLog({ phase: 'planning', action: '开始规划任务' });
