@@ -72,11 +72,17 @@ export function useRAG() {
 
     // 计算每个 chunk 的相似度
     const results: SearchResult[] = [];
+    const allScores: { index: number; score: number; preview: string }[] = [];
 
     for (const smallChunk of smallChunks) {
       if (!smallChunk.embedding) continue;
 
       const score = cosineSimilarity(queryEmbedding, smallChunk.embedding);
+      allScores.push({
+        index: smallChunk.position.index,
+        score,
+        preview: smallChunk.content.slice(0, 50)
+      });
 
       if (score >= config.scoreThreshold) {
         const doc = getDocument(smallChunk.documentId);
@@ -95,6 +101,11 @@ export function useRAG() {
         }
       }
     }
+
+    // 调试日志：显示所有相似度分数
+    console.log('🔍 检索调试 - 查询:', query);
+    console.log('📊 所有片段相似度:', allScores.sort((a, b) => b.score - a.score).slice(0, 5));
+    console.log('✅ 命中阈值(>=', config.scoreThreshold, ')的片段数:', results.length);
 
     // 按分数排序，返回 Top K
     return results

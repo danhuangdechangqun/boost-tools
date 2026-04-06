@@ -97,7 +97,7 @@ export const DEFAULT_RAG_CONFIG: RAGConfig = {
   chunkOverlap: 50,
   bigChunkMaxSize: 800,      // 新增：Big Chunk 最大大小
   topK: 3,
-  scoreThreshold: 0.7
+  scoreThreshold: 0.5        // 降低阈值，提高召回率
 };
 
 // 支持的文件类型
