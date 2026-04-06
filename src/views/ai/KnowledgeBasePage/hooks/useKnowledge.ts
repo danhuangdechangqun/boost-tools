@@ -1,110 +1,13 @@
 // 知识库管理Hook
 
 import { useState, useCallback } from 'react';
-import { Document, Chunk, BigChunk, KnowledgeStats, RAGConfig, DEFAULT_RAG_CONFIG } from '../types';
+import { Document, SmallChunk, KnowledgeStats, RAGConfig, DEFAULT_RAG_CONFIG } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { storage } from '@/services/storage';
+import { chunkDocument } from '@/utils/chunking';
 
 const DOCUMENTS_KEY = 'knowledge_documents';
 const RAG_CONFIG_KEY = 'rag_config';
-
-// 临时切片结果（用于创建BigChunk）
-interface TempChunk {
-  content: string;
-  position: {
-    start: number;
-    end: number;
-    index: number;
-  };
-}
-
-// 文本切片函数
-function chunkText(text: string, chunkSize: number, overlap: number): TempChunk[] {
-  const chunks: TempChunk[] = [];
-
-  // 按段落分割
-  const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
-
-  let currentChunk = '';
-  let position = 0;
-
-  for (const paragraph of paragraphs) {
-    // 如果当前块加上新段落不超过大小限制，添加到当前块
-    if (currentChunk.length + paragraph.length + 2 <= chunkSize) {
-      currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
-    } else {
-      // 保存当前块
-      if (currentChunk.trim()) {
-        chunks.push({
-          content: currentChunk.trim(),
-          position: {
-            start: position,
-            end: position + currentChunk.length,
-            index: chunks.length
-          }
-        });
-        position += currentChunk.length;
-      }
-
-      // 开始新块
-      currentChunk = paragraph;
-
-      // 如果段落本身超过大小限制，需要分割
-      if (paragraph.length > chunkSize) {
-        const sentences = paragraph.match(/[^。！？.!?]+[。！？.!?]+/g) || [paragraph];
-        for (const sentence of sentences) {
-          if (sentence.length <= chunkSize) {
-            if (currentChunk.length + sentence.length > chunkSize) {
-              if (currentChunk.trim()) {
-                chunks.push({
-                  content: currentChunk.trim(),
-                  position: {
-                    start: position,
-                    end: position + currentChunk.length,
-                    index: chunks.length
-                  }
-                });
-                position += currentChunk.length;
-              }
-              currentChunk = sentence;
-            } else {
-              currentChunk += sentence;
-            }
-          } else {
-            // 句子太长，强制分割
-            for (let i = 0; i < sentence.length; i += chunkSize - overlap) {
-              const piece = sentence.slice(i, i + chunkSize);
-              if (piece.trim()) {
-                chunks.push({
-                  content: piece.trim(),
-                  position: {
-                    start: position + i,
-                    end: position + i + piece.length,
-                    index: chunks.length
-                  }
-                });
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // 保存最后一块
-  if (currentChunk.trim()) {
-    chunks.push({
-      content: currentChunk.trim(),
-      position: {
-        start: position,
-        end: position + currentChunk.length,
-        index: chunks.length
-      }
-    });
-  }
-
-  return chunks;
-}
 
 export function useKnowledge() {
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -204,31 +107,11 @@ export function useKnowledge() {
     });
 
     try {
-      // 切片 - 暂时创建简单的BigChunk结构
-      // TODO: Task 2 将实现真正的语义边界识别切分
-      const rawChunks = chunkText(doc.content, config.chunkSize, config.chunkOverlap);
-
-      // 创建临时的BigChunk结构（每个chunk作为一个BigChunk，包含一个SmallChunk）
-      const bigChunks: BigChunk[] = rawChunks.map((rc, idx) => {
-        const bigChunkId = uuidv4();
-        return {
-          id: bigChunkId,
-          documentId: docId,
-          content: rc.content,
-          smallChunks: [{
-            id: uuidv4(),
-            documentId: docId,
-            bigChunkId,
-            content: rc.content,
-            position: {
-              start: 0,
-              end: rc.content.length,
-              index: 0
-            }
-          }],
-          position: rc.position,
-          boundaryType: 'paragraph' as const
-        };
+      // 使用新的切分架构：Big Chunk -> Small Chunk
+      const bigChunks = chunkDocument(doc.content, doc.type, docId, {
+        bigChunkMaxSize: config.bigChunkMaxSize,
+        smallChunkSize: config.chunkSize,
+        smallChunkOverlap: config.chunkOverlap
       });
 
       // 使用函数式更新避免闭包问题
@@ -270,13 +153,16 @@ export function useKnowledge() {
 
   // 获取统计信息
   const getStats = useCallback((): KnowledgeStats => {
-    const chunkCount = documents.reduce((sum, doc) =>
-      sum + doc.bigChunks.reduce((s, bc) => s + bc.smallChunks.length, 0), 0);
+    const smallChunkCount = documents.reduce(
+      (sum, doc) => sum + (doc.bigChunks || []).reduce(
+        (s, bc) => s + bc.smallChunks.length, 0
+      ), 0
+    );
     const totalSize = documents.reduce((sum, doc) => sum + doc.size, 0);
 
     return {
       documentCount: documents.length,
-      chunkCount,
+      chunkCount: smallChunkCount,
       totalSize,
       lastUpdated: documents.length > 0
         ? documents.reduce((latest, doc) =>
@@ -287,10 +173,10 @@ export function useKnowledge() {
     };
   }, [documents]);
 
-  // 获取所有chunks（用于检索）
-  const getAllChunks = useCallback((): Chunk[] => {
+  // 获取所有SmallChunks（用于向量检索）
+  const getAllChunks = useCallback((): SmallChunk[] => {
     return documents.flatMap(doc =>
-      doc.bigChunks.flatMap(bc => bc.smallChunks)
+      (doc.bigChunks || []).flatMap(bc => bc.smallChunks)
     );
   }, [documents]);
 
