@@ -79,6 +79,17 @@ function quickMatch(input: string): IntentResult | null {
   const lowerInput = input.toLowerCase();
   const trimmedInput = input.trim();
 
+  // 优先检测：加密/哈希关键词（高频场景）
+  if (/\b(md5|sha1|sha256|sha512|sha|加密|哈希|hash)\b/i.test(lowerInput)) {
+    const algorithm = detectAlgorithm(input);
+    const data = extractCryptoData(input);
+    return {
+      intent: 'crypto',
+      confidence: data ? 0.95 : 0.85, // 有数据置信度高，无数据也会触发
+      params: { algorithm, data }
+    };
+  }
+
   // 优先检测：用户直接输入数据格式（没有说意图关键词）
   // 检测JSON格式
   if (trimmedInput.startsWith('{') || trimmedInput.startsWith('[')) {
@@ -133,16 +144,6 @@ function quickMatch(input: string): IntentResult | null {
       intent: 'cron'
     },
     {
-      patterns: [/计算.*md5/, /md5.*哈希/, /md5.*值/],
-      intent: 'crypto',
-      params: { algorithm: 'md5' }
-    },
-    {
-      patterns: [/计算.*sha/, /sha.*哈希/, /sha256/],
-      intent: 'crypto',
-      params: { algorithm: 'sha256' }
-    },
-    {
       // 待办管理 - 优先级高
       patterns: [/加.*待办/, /添加.*待办/, /今日待办/, /明日待办/, /下周计划/, /待办.*任务/, /开个.*待办/],
       intent: 'todo'
@@ -158,9 +159,6 @@ function quickMatch(input: string): IntentResult | null {
         if (rule.intent === 'uuid') {
           // UUID：提取数量和前缀
           params = { ...params, ...extractUuidParams(input) };
-        } else if (rule.intent === 'crypto') {
-          // 加密：提取要计算的内容
-          params = { ...params, data: extractCryptoData(input) };
         } else {
           // 其他：提取数据
           params = { ...params, data: extractData(input) };
@@ -243,8 +241,24 @@ function extractUuidParams(input: string): { count?: number; prefix?: string } {
   return result;
 }
 
+// 检测加密算法类型
+function detectAlgorithm(input: string): string {
+  const lower = input.toLowerCase();
+  if (lower.includes('sha512')) return 'sha512';
+  if (lower.includes('sha256')) return 'sha256';
+  if (lower.includes('sha1')) return 'sha1';
+  if (lower.includes('sha')) return 'sha256'; // 默认sha256
+  return 'md5'; // 默认md5
+}
+
 // 提取加密参数（要计算的内容）
 function extractCryptoData(input: string): string | undefined {
+  // 匹配引号内的内容（最优先）
+  const quoteMatch = input.match(/["'"']([^"'""']+)["'"']/);
+  if (quoteMatch) {
+    return quoteMatch[1];
+  }
+
   // 匹配 "密码为XXX"、"内容为XXX"、"字符串XXX"、"文本XXX"
   const namedMatch = input.match(/(?:密码|内容|字符串|文本|值)(?:为|是)?\s*([^\s,，]+)/i);
   if (namedMatch) {
@@ -252,15 +266,21 @@ function extractCryptoData(input: string): string | undefined {
   }
 
   // 匹配 "计算XXX的MD5"、"XXX的哈希"、"对XXX计算"
-  const hashMatch = input.match(/(?:计算|算|求)\s*([^\s,，]+)\s*(?:的|的)?(?:md5|sha|哈希|hash)/i);
+  const hashMatch = input.match(/(?:计算|算|求)\s*([^\s,，]+)\s*(?:的)?(?:md5|sha|哈希|hash)/i);
   if (hashMatch) {
     return hashMatch[1];
   }
 
-  // 匹配引号内的内容
-  const quoteMatch = input.match(/["'']([^"'"'']+)["'']/);
-  if (quoteMatch) {
-    return quoteMatch[1];
+  // 匹配 "加密XXX"、"XXX加密"、"哈希XXX"
+  const actionMatch = input.match(/(?:加密|哈希)\s*([^\s,，]+)|([^\s,，]+)\s*(?:加密|哈希)/i);
+  if (actionMatch) {
+    return actionMatch[1] || actionMatch[2];
+  }
+
+  // 匹配 "一下XXX"、"XXX一下"（如：加密一下abc）
+  const yiXiaMatch = input.match(/(?:加密|哈希)?一下\s*([^\s,，]+)|([^\s,，]+)\s*一下(?:加密|哈希)?/i);
+  if (yiXiaMatch) {
+    return yiXiaMatch[1] || yiXiaMatch[2];
   }
 
   return undefined;

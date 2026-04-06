@@ -71,6 +71,10 @@ const ImportModal: React.FC<ImportModalProps> = ({
       message.error('文件解析失败: ' + e.message);
     } finally {
       setLoading(false);
+      // 清空 input value，允许重复选择同一文件
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 

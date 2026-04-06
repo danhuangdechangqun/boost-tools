@@ -60,7 +60,11 @@
       "Read(//d/code/AI/boost-tools/**)",
       "Bash(node:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npm test:*)",
+      "Bash(npm test:run)",
+      "Bash(npx vitest:*)"
     ]
   }
 }

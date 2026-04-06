@@ -228,5 +228,8 @@ export const callLlm = async (prompt: string, options?: { maxTokens?: number }):
 
 export const testLlmConnection = llmTestConnection;
 
+// Embedding服务
+export { getEmbedding, getSingleEmbedding, getBatchEmbeddings } from './embedding';
+
 // 节假日服务
 export { initHolidays, isHoliday, isWorkday, getNextWorkday, getFridayOrLastWorkday, shouldGenerateWeeklyReport } from './holiday';
