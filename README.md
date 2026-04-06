@@ -1,6 +1,31 @@
-# boost-tools
+# Boost Tools - 效能助推器
 
-效能助推器 - 基于 Tauri 的本地化提效工具集
+一款基于 **Tauri + React + TypeScript** 构建的本地化桌面提效工具集，提供多种实用功能帮助提升工作效率。
+
+## 核心功能
+
+- **文档处理** - 支持 Word、PDF、Excel 等多种格式文档的读取与处理
+- **数据可视化** - 基于 ECharts 和 Recharts 的图表展示
+- **流程编排** - 可视化流程图设计与管理
+- **知识库管理** - 本地化知识存储与查询
+- **快捷操作** - 全局快捷键支持，快速唤起常用功能
+
+## 技术栈
+
+- **前端框架**: React 18 + TypeScript
+- **桌面框架**: Tauri 2.x (Rust 后端)
+- **UI 组件**: Ant Design 5.x
+- **图表库**: ECharts / Recharts
+- **流程图**: XYFlow
+- **构建工具**: Vite 5.x
+
+## 下载安装
+
+👉 **[前往 GitHub Releases 下载最新版本](https://github.com/danhuangdechangqun/boost-tools/releases)**
+
+支持 Windows 平台，下载对应安装包后直接安装即可使用。
+
+---
 
 ## 快速启动
 
