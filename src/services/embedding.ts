@@ -2,7 +2,8 @@
 
 const DOUBAO_EMBEDDING_API = 'https://ark.cn-beijing.volces.com/api/v3/embeddings';
 const DOUBAO_API_KEY = '3cedbda2-bb5b-4ffc-b49a-19afdf86d8f9';
-const DOUBAO_EMBEDDING_MODEL = 'doubao-embedding-text-240715';
+// 更新为有效的 Embedding 模型名称
+const DOUBAO_EMBEDDING_MODEL = 'doubao-embedding-large-text-240915';
 
 interface EmbeddingResponse {
   id: string;

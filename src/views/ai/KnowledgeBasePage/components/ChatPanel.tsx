@@ -57,16 +57,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           }}
         />
 
-        <div style={{ maxWidth: '70%' }}>
+        <div style={{ maxWidth: '70%', minWidth: 0 }}>
           <div
             style={{
               padding: '12px 16px',
               borderRadius: isUser ? '12px 0 12px 12px' : '0 12px 12px 12px',
               background: isUser ? '#3B82F6' : '#F3F4F6',
-              color: isUser ? 'white' : '#1F2937'
+              color: isUser ? 'white' : '#1F2937',
+              wordBreak: 'break-word',
+              overflowWrap: 'break-word'
             }}
           >
-            <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content}</div>
           </div>
 
           {/* 来源标签 */}
