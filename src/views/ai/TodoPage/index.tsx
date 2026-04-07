@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Input, Card, Modal, Form, message, Spin, Tag } from 'antd';
+import { Button, Input, Card, Modal, Form, message, Spin, Tag, Select } from 'antd';
 import { ArrowLeft, Plus, Trash2, Check, Calendar, GripVertical, RotateCcw, History, AlertCircle } from 'lucide-react';
 import dayjs from 'dayjs';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
@@ -30,7 +30,6 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
   // 自动迁移：将过期的"tomorrow"任务迁移到"incomplete"
   const autoMigrateTodos = async (todoList: TodoItem[]) => {
     const today = dayjs().format('YYYY-MM-DD');
-    const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
 
     // 找出需要迁移的任务：
     // 1. 昨天的今日待办未完成 -> incomplete
@@ -128,10 +127,12 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
 
   const handleDoubleClick = (todo: TodoItem) => {
     setEditingTodo(todo);
+    // 对于 incomplete 或 completed 的任务，不设置默认分组值，让用户选择目标分组
+    const defaultGroup = ['incomplete', 'completed'].includes(todo.group) ? undefined : todo.group;
     editForm.setFieldsValue({
       title: todo.title,
       description: todo.description || '',
-      group: todo.group,
+      group: defaultGroup,
     });
     setEditModalOpen(true);
   };
@@ -142,7 +143,8 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
   };
 
   const handleRestoreToToday = async (todo: TodoItem) => {
-    await updateTodo(todo.id, { status: 'pending', group: 'today' });
+    const today = dayjs().format('YYYY-MM-DD');
+    await updateTodo(todo.id, { status: 'pending', group: 'today', dueDate: today });
     message.success('已放回今日待办');
     setCompletedDetailModalOpen(false);
     setViewingCompletedTodo(null);
@@ -151,11 +153,31 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
 
   const handleEditSave = async (values: any) => {
     if (!editingTodo) return;
-    await updateTodo(editingTodo.id, {
+
+    const today = dayjs().format('YYYY-MM-DD');
+    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
+
+    // 构建更新对象
+    const updates: Partial<TodoItem> = {
       title: values.title,
       description: values.description,
       group: values.group,
-    });
+    };
+
+    // 如果任务已完成，且改到了待办分组，需要同时把status改为pending
+    if (editingTodo.status === 'completed' && ['today', 'tomorrow', 'nextWeek'].includes(values.group)) {
+      updates.status = 'pending';
+      updates.completeTime = undefined; // 清除完成时间
+    }
+
+    // 移动到"今日待办"时，需要更新dueDate为今天，否则会被autoMigrateTodos迁移回incomplete
+    if (values.group === 'today') {
+      updates.dueDate = today;
+    } else if (values.group === 'tomorrow') {
+      updates.dueDate = tomorrow;
+    }
+
+    await updateTodo(editingTodo.id, updates);
     message.success('修改成功');
     setEditModalOpen(false);
     setEditingTodo(null);
@@ -175,8 +197,26 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
     const todo = todos.find(t => t.id === draggableId);
 
     if (todo && newGroup !== source.droppableId) {
-      // 更新分组
-      await updateTodo(draggableId, { group: newGroup });
+      const today = dayjs().format('YYYY-MM-DD');
+      const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
+
+      // 构建更新对象
+      const updates: Partial<TodoItem> = { group: newGroup };
+
+      // 移动到"今日待办"时，需要更新dueDate为今天，否则会被autoMigrateTodos迁移回incomplete
+      if (newGroup === 'today') {
+        updates.dueDate = today;
+      } else if (newGroup === 'tomorrow') {
+        updates.dueDate = tomorrow;
+      }
+
+      // 如果从已完成区域拖到待办区域，需要把status改为pending
+      if (todo.status === 'completed' && ['today', 'tomorrow', 'nextWeek'].includes(newGroup)) {
+        updates.status = 'pending';
+        updates.completeTime = undefined;
+      }
+
+      await updateTodo(draggableId, updates);
       loadTodos();
     }
   };
@@ -357,9 +397,10 @@ ${nextWeekSection}
                 size="small"
                 type="primary"
                 onClick={async () => {
+                  const today = dayjs().format('YYYY-MM-DD');
                   const incompleteTodos = getGroupTodos('incomplete');
                   for (const todo of incompleteTodos) {
-                    await updateTodo(todo.id, { group: 'today' });
+                    await updateTodo(todo.id, { group: 'today', dueDate: today });
                   }
                   message.success(`已将${incompleteTodos.length}个任务移至今日待办`);
                   loadTodos();
@@ -414,11 +455,11 @@ ${nextWeekSection}
             <Input.TextArea rows={3} placeholder="输入任务描述（可选）" />
           </Form.Item>
           <Form.Item name="group" label="分组" initialValue="today">
-            <select style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D9D9D9' }}>
-              <option value="today">今日待办</option>
-              <option value="tomorrow">明日待办</option>
-              <option value="nextWeek">下周计划</option>
-            </select>
+            <Select options={[
+              { value: 'today', label: '今日待办' },
+              { value: 'tomorrow', label: '明日待办' },
+              { value: 'nextWeek', label: '下周计划' },
+            ]} />
           </Form.Item>
         </Form>
       </Modal>
@@ -444,12 +485,12 @@ ${nextWeekSection}
           <Form.Item name="description" label="任务描述">
             <Input.TextArea rows={3} placeholder="输入任务描述（可选）" />
           </Form.Item>
-          <Form.Item name="group" label="分组">
-            <select style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D9D9D9' }}>
-              <option value="today">今日待办</option>
-              <option value="tomorrow">明日待办</option>
-              <option value="nextWeek">下周计划</option>
-            </select>
+          <Form.Item name="group" label="分组" rules={[{ required: true, message: '请选择目标分组' }]}>
+            <Select placeholder="请选择目标分组" options={[
+              { value: 'today', label: '今日待办' },
+              { value: 'tomorrow', label: '明日待办' },
+              { value: 'nextWeek', label: '下周计划' },
+            ]} />
           </Form.Item>
         </Form>
       </Modal>
