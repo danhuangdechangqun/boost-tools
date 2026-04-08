@@ -39,7 +39,7 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
     );
 
     const needsMigrationToToday = todoList.filter(t =>
-      t.group === 'tomorrow' && t.status === 'pending' && t.dueDate && t.dueDate < today
+      t.group === 'tomorrow' && t.status === 'pending' && t.dueDate && t.dueDate <= today
     );
 
     let migratedCount = 0;
