@@ -7,7 +7,7 @@ export type DocumentType = 'docx' | 'pdf' | 'md' | 'txt' | 'json';
 export type DocumentStatus = 'pending' | 'processing' | 'ready' | 'error';
 
 // 边界识别类型
-export type BoundaryType = 'heading' | 'numbered' | 'newline' | 'paragraph' | 'page';
+export type BoundaryType = 'heading' | 'numbered' | 'newline' | 'paragraph' | 'page' | 'code' | 'table' | 'list';
 
 // SmallChunk - 用于向量检索的小片段
 export interface SmallChunk {
@@ -31,7 +31,7 @@ export interface SmallChunk {
 export interface BigChunk {
   id: string;
   documentId: string;
-  content: string;           // 完整语义段落内容
+  content: string;           // 宯整语义段落内容
   smallChunks: SmallChunk[]; // 关联的小片段数组
   position: {
     start: number;           // 在原文中的起始位置
@@ -39,6 +39,10 @@ export interface BigChunk {
     index: number;           // BigChunk 序号
   };
   boundaryType: BoundaryType; // 边界识别类型
+  metadata?: {
+    headingPath?: string[];      // 标题层级路径
+    headingLevel?: number;       // 标题层级（1-6）
+  };
 }
 
 // 保留 Chunk 作为兼容类型（指向 SmallChunk）
@@ -51,6 +55,7 @@ export interface Document {
   type: DocumentType;
   size: number;
   content: string;
+  html?: string;             // Word 文件的 HTML 内容
   bigChunks: BigChunk[];     // 改用 BigChunk 结构
   status: DocumentStatus;
   error?: string;
