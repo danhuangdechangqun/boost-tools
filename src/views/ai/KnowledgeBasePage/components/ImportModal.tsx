@@ -13,7 +13,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.j
 interface ImportModalProps {
   visible: boolean;
   onClose: () => void;
-  onImport: (name: string, type: DocumentType, content: string) => void;
+  onImport: (name: string, type: DocumentType, content: string, html?: string) => void;
 }
 
 const ImportModal: React.FC<ImportModalProps> = ({
@@ -24,23 +24,48 @@ const ImportModal: React.FC<ImportModalProps> = ({
   const [name, setName] = useState('');
   const [type, setType] = useState<DocumentType>('txt');
   const [content, setContent] = useState('');
+  const [html, setHtml] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 解析文件结果
+  interface ParseResult {
+    content: string;
+    html?: string;
+  }
+
   // 解析文件
-  const parseFile = async (file: File): Promise<string> => {
+  const parseFile = async (file: File): Promise<ParseResult> => {
     const extension = '.' + file.name.split('.').pop()?.toLowerCase();
 
     switch (extension) {
       case '.txt':
       case '.md':
       case '.json':
-        return await file.text();
+        return { content: await file.text() };
 
       case '.docx':
-        const arrayBuffer = await file.arrayBuffer();
-        const result = await mammoth.extractRawText({ arrayBuffer });
-        return result.value;
+        // 使用 convertToHtml 提取样式
+        const arrayBuffer1 = await file.arrayBuffer();
+        const htmlResult = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer1 }, {
+          styleMap: [
+            "p[style-name='Heading 1'] => h1:fresh",
+            "p[style-name='Heading 2'] => h2:fresh",
+            "p[style-name='Heading 3'] => h3:fresh",
+            "p[style-name='Heading 4'] => h4:fresh",
+            "p[style-name='Heading 5'] => h5:fresh",
+            "p[style-name='Heading 6'] => h6:fresh"
+          ]
+        });
+
+        // 提取纯文本用于 fallback
+        const arrayBuffer2 = await file.arrayBuffer();
+        const textResult = await mammoth.extractRawText({ arrayBuffer: arrayBuffer2 });
+
+        return {
+          content: textResult.value,
+          html: htmlResult.value
+        };
 
       case '.pdf':
         const pdfArrayBuffer = await file.arrayBuffer();
@@ -51,7 +76,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
           const textContent = await page.getTextContent();
           pdfText += textContent.items.map((item: any) => item.str).join(' ') + '\n';
         }
-        return pdfText;
+        return { content: pdfText };
 
       default:
         throw new Error('不支持的文件类型');
@@ -62,8 +87,9 @@ const ImportModal: React.FC<ImportModalProps> = ({
   const handleFileUpload = async (file: File) => {
     setLoading(true);
     try {
-      const text = await parseFile(file);
-      setContent(text);
+      const result = await parseFile(file);
+      setContent(result.content);
+      setHtml(result.html);
       setName(file.name);
       setType(file.name.split('.').pop() as DocumentType);
       message.success('文件解析成功');
@@ -89,12 +115,13 @@ const ImportModal: React.FC<ImportModalProps> = ({
       return;
     }
 
-    onImport(name.trim(), type, content);
+    onImport(name.trim(), type, content, html);
 
     // 重置
     setName('');
     setType('txt');
     setContent('');
+    setHtml(undefined);
     onClose();
   };
 
@@ -103,6 +130,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
     setName('');
     setType('txt');
     setContent('');
+    setHtml(undefined);
     onClose();
   };
 

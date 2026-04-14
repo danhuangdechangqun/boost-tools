@@ -57,7 +57,8 @@ export function useKnowledge() {
   const addDocument = useCallback(async (
     name: string,
     type: Document['type'],
-    content: string
+    content: string,
+    html?: string
   ): Promise<Document> => {
     // 创建文档
     const doc: Document = {
@@ -66,6 +67,7 @@ export function useKnowledge() {
       type,
       size: content.length,
       content,
+      html,  // 存储 HTML 内容用于 Word 语义切分
       bigChunks: [],
       status: 'pending',
       createdAt: new Date().toISOString(),
@@ -111,7 +113,7 @@ export function useKnowledge() {
         bigChunkMaxSize: config.bigChunkMaxSize,
         smallChunkSize: config.chunkSize,
         smallChunkOverlap: config.chunkOverlap
-      });
+      }, doc.html);  // 传入 HTML 用于 Word 语义切分
 
       // 使用函数式更新避免闭包问题
       setDocuments(prevDocs => {

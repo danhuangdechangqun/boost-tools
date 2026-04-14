@@ -53,9 +53,9 @@ const KnowledgeBasePage: React.FC<KnowledgeBasePageProps> = ({ onBack }) => {
   }, [loadDocuments]);
 
   // 导入文档
-  const handleImport = async (name: string, type: DocumentType, content: string) => {
+  const handleImport = async (name: string, type: DocumentType, content: string, html?: string) => {
     try {
-      const doc = await addDocument(name, type, content);
+      const doc = await addDocument(name, type, content, html);
       message.success('文档已添加，正在处理...');
 
       // 自动处理文档，传入文档对象避免状态延迟
