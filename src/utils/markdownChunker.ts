@@ -209,10 +209,13 @@ function renderListToken(token: Token): string {
   const items: string[] = [];
   const indent = list.loose ? '' : '  ';
 
+  // 有序列表的起始序号
+  let itemIndex = list.start || 1;
   for (const item of list.items || []) {
-    const prefix = list.ordered ? `${item.start || 1}. ` : '- ';
+    const prefix = list.ordered ? `${itemIndex}. ` : '- ';
     const text = item.text || '';
     items.push(indent + prefix + text);
+    if (list.ordered) itemIndex++;
   }
 
   return items.join('\n') + '\n';

@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { BigChunk, SmallChunk, BoundaryType, DocumentType } from '@/views/ai/KnowledgeBasePage/types';
+import { markdownChunker } from './markdownChunker';
+import { docxChunker } from './docxChunker';
 
 // 编号模式正则
 const NUMBERED_PATTERNS = [
@@ -15,6 +17,10 @@ interface BoundaryResult {
   start: number;
   end: number;
   boundaryType: BoundaryType;
+  metadata?: {
+    headingPath?: string[];
+    headingLevel?: number;
+  };
 }
 
 /**
@@ -133,14 +139,19 @@ export function splitSmallChunks(
 export function splitBigChunks(
   text: string,
   docType: DocumentType,
-  maxSize: number = 800
+  maxSize: number = 800,
+  html?: string  // Word 导入时传入 HTML
 ): BoundaryResult[] {
   let boundaries: BoundaryResult[];
 
   switch (docType) {
     case 'md':
-      boundaries = detectNewlineBoundaries(text, 'double');
-      boundaries = boundaries.map(b => ({ ...b, boundaryType: 'heading' as BoundaryType }));
+      boundaries = markdownChunker(text, maxSize);
+      break;
+
+    case 'docx':
+      // Word 使用 HTML 解析
+      boundaries = html ? docxChunker(html, maxSize) : detectNewlineBoundaries(text, 'double');
       break;
 
     case 'txt':
@@ -153,19 +164,31 @@ export function splitBigChunks(
       }
       break;
 
-    case 'docx':
     case 'pdf':
       boundaries = detectNewlineBoundaries(text, 'double');
+      break;
+
+    case 'json':
+      // JSON 不切分
+      boundaries = [{
+        content: text,
+        start: 0,
+        end: text.length,
+        boundaryType: 'paragraph'
+      }];
       break;
 
     default:
       boundaries = detectNewlineBoundaries(text, 'double');
   }
 
-  // 处理超长段落
+  // 处理超长段落（已在各切分器中处理，这里作为兜底）
   const finalBoundaries: BoundaryResult[] = [];
   for (const b of boundaries) {
-    if (b.content.length > maxSize) {
+    if (b.content.length > maxSize &&
+        b.boundaryType !== 'code' &&
+        b.boundaryType !== 'table' &&
+        b.boundaryType !== 'list') {
       const subParts = splitContentBySize(b.content, maxSize);
       let subPosition = b.start;
       for (const subPart of subParts) {
@@ -173,7 +196,8 @@ export function splitBigChunks(
           content: subPart,
           start: subPosition,
           end: subPosition + subPart.length,
-          boundaryType: b.boundaryType
+          boundaryType: b.boundaryType,
+          metadata: b.metadata  // 保留 metadata
         });
         subPosition += subPart.length;
       }
@@ -212,9 +236,10 @@ export function chunkDocument(
     bigChunkMaxSize: number;
     smallChunkSize: number;
     smallChunkOverlap: number;
-  }
+  },
+  html?: string  // Word 导入时传入
 ): BigChunk[] {
-  const bigBoundaries = splitBigChunks(content, docType, config.bigChunkMaxSize);
+  const bigBoundaries = splitBigChunks(content, docType, config.bigChunkMaxSize, html);
 
   const bigChunks: BigChunk[] = bigBoundaries.map((b, bigIndex) => {
     const bigChunkId = uuidv4();
@@ -243,7 +268,8 @@ export function chunkDocument(
         end: b.end,
         index: bigIndex
       },
-      boundaryType: b.boundaryType
+      boundaryType: b.boundaryType,
+      metadata: b.metadata  // 传递 metadata
     };
   });
 
