@@ -103,10 +103,35 @@ function parseHtmlElements(html: string): HtmlElement[] {
 }
 
 /**
- * 移除 HTML 标签
+ * 移除 HTML 标签并解码 HTML 实体
  */
 function stripHtmlTags(html: string): string {
-  return html.replace(/<[^>]+>/g, '').trim();
+  // 先移除 HTML 标签
+  let text = html.replace(/<[^>]+>/g, '').trim();
+
+  // 解码常见的 HTML 实体
+  const htmlEntities: Record<string, string> = {
+    '&gt;': '>',
+    '&lt;': '<',
+    '&amp;': '&',
+    '&quot;': '"',
+    '&apos;': "'",
+    '&nbsp;': ' ',
+    '&#39;': "'",
+    '&#34;': '"',
+  };
+
+  // 替换 HTML 实体
+  for (const [entity, char] of Object.entries(htmlEntities)) {
+    text = text.replace(new RegExp(entity, 'g'), char);
+  }
+
+  // 替换数字实体（如 &#60; 代表 <）
+  text = text.replace(/&#(\d+);/g, (match, num) => {
+    return String.fromCharCode(parseInt(num));
+  });
+
+  return text.trim();
 }
 
 /**
