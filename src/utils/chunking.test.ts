@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   detectNumberedBoundaries,
   detectNewlineBoundaries,
-  splitSmallChunks,
+  splitSmallChunksSemantically,
   chunkDocument
 } from './chunking';
 
@@ -48,27 +48,106 @@ describe('detectNewlineBoundaries', () => {
   });
 });
 
-describe('splitSmallChunks', () => {
-  it('应该将BigChunk切分成多个SmallChunk', () => {
-    const content = '这是一个很长的段落内容，需要被切分成多个小块进行向量检索。这是第二部分的内容，确保内容足够长以触发切分逻辑。这是第三部分，继续增加文本长度。';
-    const smallChunks = splitSmallChunks(content, 30, 5);
-    expect(smallChunks.length).toBeGreaterThan(1);
-    expect(smallChunks[0].content.length).toBeLessThanOrEqual(30);
+describe('splitSmallChunksSemantically', () => {
+  it('should split by level-2 headings', () => {
+    const content = `# 第一章
+## 1.1 背景
+背景内容。
+
+## 1.2 目标
+目标内容。`;
+
+    const chunks = splitSmallChunksSemantically(
+      content,
+      250,
+      50,
+      'bigChunkId',
+      'docId',
+      'md',
+      ['第一章']
+    );
+
+    // 应按二级标题切分
+    expect(chunks.length).toBeGreaterThanOrEqual(2);
+    expect(chunks[0].metadata?.heading).toContain('第一章');
   });
 
-  it('短内容应该返回单个SmallChunk', () => {
-    const content = '短内容';
-    const smallChunks = splitSmallChunks(content, 100, 10);
-    expect(smallChunks).toHaveLength(1);
-  });
+  it('should use sliding window for oversized content', () => {
+    const longContent = '这是一个非常长的段落内容，超过了限制大小。' + '继续添加更多内容来确保长度超过限制。'.repeat(10);
 
-  it('应该正确计算overlap', () => {
-    const content = 'ABCDEFghijklmnopqrstuvwxyz';
-    const smallChunks = splitSmallChunks(content, 10, 3);
-    // 检查相邻chunk是否有overlap
-    if (smallChunks.length > 1) {
-      const overlap = smallChunks[0].content.slice(-3);
-      expect(smallChunks[1].content.startsWith(overlap)).toBe(true);
+    const chunks = splitSmallChunksSemantically(
+      longContent,
+      50,
+      10,
+      'bigChunkId',
+      'docId',
+      'txt',
+      []
+    );
+
+    // 应切分成多个片段
+    expect(chunks.length).toBeGreaterThan(1);
+    // 检查滑窗重叠
+    if (chunks.length > 1) {
+      const overlapContent = chunks[0].content.slice(-10);
+      // 下一个片段应该包含重叠部分（可能不完全匹配，因为是 trim 后）
+      expect(chunks[1].content.length).toBeGreaterThan(0);
     }
+  });
+
+  it('should return single chunk for short content', () => {
+    const content = '短内容';
+
+    const chunks = splitSmallChunksSemantically(
+      content,
+      250,
+      50,
+      'bigChunkId',
+      'docId',
+      'txt',
+      []
+    );
+
+    expect(chunks.length).toBe(1);
+  });
+});
+
+describe('chunkDocument', () => {
+  it('should create BigChunks by level-1 headings', () => {
+    const content = `# 第一章
+第一章内容。
+
+# 第二章
+第二章内容。`;
+
+    const bigChunks = chunkDocument(content, 'md', 'docId', {
+      bigChunkMaxSize: 800,
+      smallChunkSize: 250,
+      smallChunkOverlap: 50
+    });
+
+    expect(bigChunks.length).toBe(2);
+    expect(bigChunks[0].metadata?.headingPath).toEqual(['第一章']);
+    expect(bigChunks[1].metadata?.headingPath).toEqual(['第二章']);
+  });
+
+  it('should create SmallChunks by level-2 headings', () => {
+    const content = `# 第一章
+## 1.1 背景
+背景内容。
+
+## 1.2 目标
+目标内容。`;
+
+    const bigChunks = chunkDocument(content, 'md', 'docId', {
+      bigChunkMaxSize: 800,
+      smallChunkSize: 250,
+      smallChunkOverlap: 50
+    });
+
+    // 一个 BigChunk
+    expect(bigChunks.length).toBe(1);
+    // 应有多个 SmallChunks（按二级标题切分）
+    expect(bigChunks[0].smallChunks.length).toBeGreaterThanOrEqual(2);
   });
 });

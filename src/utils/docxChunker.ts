@@ -15,7 +15,7 @@ interface HtmlElement {
   tagName: string;
   text: string;
   innerHTML?: string;
-  children?: HtmlElement[];
+  level?: number;  // 标题层级（1-6）
 }
 
 /**
@@ -54,10 +54,11 @@ function createBoundary(
 
 /**
  * 简单 HTML 解析（提取语义元素）
- * 注意：这是简化版本，复杂 HTML 可能需要用 DOMParser
+ * 按出现顺序返回元素列表
  */
 function parseHtmlElements(html: string): HtmlElement[] {
   const elements: HtmlElement[] = [];
+  const positions: { element: HtmlElement; pos: number }[] = [];
 
   // 匹配标题标签
   const headingRegex = /<h([1-6])[^>]*>(.*?)<\/h\1>/gi;
@@ -65,13 +66,15 @@ function parseHtmlElements(html: string): HtmlElement[] {
   while ((match = headingRegex.exec(html)) !== null) {
     const level = parseInt(match[1]);
     const text = stripHtmlTags(match[2]);
-    elements.push({ tagName: `h${level}`, text, innerHTML: match[0] });
+    const element = { tagName: `h${level}`, text, innerHTML: match[0], level };
+    positions.push({ element, pos: match.index });
   }
 
   // 匹配表格标签
   const tableRegex = /<table[^>]*>(.*?)<\/table>/gi;
   while ((match = tableRegex.exec(html)) !== null) {
-    elements.push({ tagName: 'table', text: '', innerHTML: match[0] });
+    const element = { tagName: 'table', text: match[1] || '', innerHTML: match[0] };
+    positions.push({ element, pos: match.index });
   }
 
   // 匹配列表标签
@@ -80,35 +83,23 @@ function parseHtmlElements(html: string): HtmlElement[] {
     const listType = match[1];
     const innerHTML = match[2];
     const text = parseListItemText(innerHTML, listType === 'ol');
-    elements.push({ tagName: listType, text, innerHTML: match[0] });
+    const element = { tagName: listType, text, innerHTML: match[0] };
+    positions.push({ element, pos: match.index });
   }
 
   // 匹配段落标签
   const pRegex = /<p[^>]*>(.*?)<\/p>/gi;
   while ((match = pRegex.exec(html)) !== null) {
     const text = stripHtmlTags(match[1]);
-    // 排除已被识别为标题的段落
-    if (text && !isHeadingParagraph(match[0], html)) {
-      elements.push({ tagName: 'p', text });
+    if (text) {
+      const element = { tagName: 'p', text };
+      positions.push({ element, pos: match.index });
     }
   }
 
   // 按出现顺序排序
-  elements.sort((a, b) => {
-    const aPos = html.indexOf(a.innerHTML || a.text);
-    const bPos = html.indexOf(b.innerHTML || b.text);
-    return aPos - bPos;
-  });
-
-  return elements;
-}
-
-/**
- * 判断段落是否是标题（已被 h 标签捕获）
- */
-function isHeadingParagraph(pHTML: string, fullHTML: string): boolean {
-  // 检查这个段落是否被包裹在标题标签中
-  return false;
+  positions.sort((a, b) => a.pos - b.pos);
+  return positions.map(p => p.element);
 }
 
 /**
@@ -138,98 +129,163 @@ function parseListItemText(innerHTML: string, ordered: boolean): string {
 }
 
 /**
- * Word HTML 解析切分
+ * Word HTML 解析切分 - BigChunk 级别
+ * 只识别一级标题（<h1>）作为 BigChunk 边界
  */
-export function docxChunker(
-  html: string,
-  maxSize: number = 800
-): BoundaryResult[] {
+export function docxChunker(html: string): BoundaryResult[] {
   const elements = parseHtmlElements(html);
   const results: BoundaryResult[] = [];
+  let currentBigChunk = '';
   let currentHeadingPath: string[] = [];
-  let currentLevel = 0;
-  let currentContent = '';
-  let currentType: BoundaryType = 'paragraph';
+  let hasTopLevelHeading = false;
 
   for (const el of elements) {
-    switch (el.tagName) {
-      case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6': {
-        // 保存之前累积的内容
-        if (currentContent.trim()) {
-          results.push(createBoundary(currentContent, currentType, currentHeadingPath, currentLevel));
+    if (el.tagName.startsWith('h')) {
+      const level = el.level || parseInt(el.tagName[1]);
+
+      if (level === 1) {
+        // 一级标题：保存之前的 BigChunk，开始新的
+        if (currentBigChunk.trim()) {
+          results.push(createBoundary(currentBigChunk, 'heading', currentHeadingPath, 1));
         }
-
-        // 更新标题路径
-        const level = parseInt(el.tagName[1]);
-        currentLevel = level;
-        currentHeadingPath = updateHeadingPath(currentHeadingPath, el.text, level);
-
-        // 开始新的标题段落
-        currentContent = el.text + '\n';
-        currentType = 'heading';
-        break;
+        currentHeadingPath = [el.text];
+        currentBigChunk = el.text + '\n\n';
+        hasTopLevelHeading = true;
+      } else {
+        // 子标题：累积到当前 BigChunk
+        currentBigChunk += el.text + '\n\n';
       }
-
-      case 'table': {
-        // 表格独立成片
-        const tableText = el.text || el.innerHTML || '';
-        results.push(createBoundary(tableText, 'table', currentHeadingPath));
-        break;
-      }
-
-      case 'ul': case 'ol': {
-        // 列表独立成片
-        results.push(createBoundary(el.text, 'list', currentHeadingPath));
-        break;
-      }
-
-      case 'p': {
-        // 段落累积到当前内容
-        currentContent += el.text + '\n';
-        break;
-      }
+    } else if (el.tagName === 'table') {
+      // 表格累积到当前 BigChunk
+      currentBigChunk += el.text + '\n\n';
+    } else if (el.tagName === 'ul' || el.tagName === 'ol') {
+      // 列表累积到当前 BigChunk
+      currentBigChunk += el.text + '\n';
+    } else if (el.tagName === 'p') {
+      // 段落累积到当前 BigChunk
+      currentBigChunk += el.text + '\n\n';
     }
   }
 
-  // 保存最后累积的内容
-  if (currentContent.trim()) {
-    results.push(createBoundary(currentContent, currentType, currentHeadingPath, currentLevel));
+  // 保存最后的 BigChunk
+  if (currentBigChunk.trim()) {
+    results.push(createBoundary(currentBigChunk, 'heading', currentHeadingPath, 1));
   }
 
-  // 处理超长普通段落
-  const finalResults: BoundaryResult[] = [];
-  for (const r of results) {
-    if (r.content.length > maxSize && r.boundaryType === 'paragraph') {
-      const subParts = splitBySize(r.content, maxSize);
-      let pos = 0;
-      for (const sub of subParts) {
-        finalResults.push({
-          content: sub,
-          start: r.start + pos,
-          end: r.start + pos + sub.length,
-          boundaryType: r.boundaryType,
-          metadata: r.metadata
-        });
-        pos += sub.length;
-      }
-    } else {
-      finalResults.push(r);
+  // 无一级标题时，整文档作为一个 BigChunk
+  if (!hasTopLevelHeading && results.length === 0 && html.trim()) {
+    // 提取纯文本作为内容
+    const plainText = stripHtmlTags(html);
+    if (plainText.trim()) {
+      results.push(createBoundary(plainText, 'paragraph', [], undefined));
     }
   }
 
-  return finalResults;
+  return results;
 }
 
 /**
- * 按固定大小拆分
+ * 在 BigChunk 内识别二级标题边界，返回子标题段落列表
+ * 用于 SmallChunk 切分参考
  */
-function splitBySize(content: string, size: number): string[] {
-  const parts: string[] = [];
-  let start = 0;
-  while (start < content.length) {
-    const end = Math.min(start + size, content.length);
-    parts.push(content.slice(start, end).trim());
-    start = end;
+export function extractSubHeadingsFromHtml(content: string): { text: string; headingPath: string[] }[] {
+  // 如果是 HTML 格式，解析元素
+  if (content.includes('<')) {
+    const elements = parseHtmlElements(content);
+    const results: { text: string; headingPath: string[] }[] = [];
+    let currentSection = '';
+    let currentSubHeadingPath: string[] = [];
+    let hasSubHeading = false;
+
+    for (const el of elements) {
+      if (el.tagName.startsWith('h')) {
+        const level = el.level || parseInt(el.tagName[1]);
+
+        if (level === 2) {
+          // 二级标题：保存之前的段落，开始新的
+          if (currentSection.trim()) {
+            results.push({ text: currentSection.trim(), headingPath: currentSubHeadingPath });
+          }
+          currentSubHeadingPath = [el.text];
+          currentSection = el.text + '\n\n';
+          hasSubHeading = true;
+        } else if (level >= 3) {
+          // 三级及以下：累积到当前段落
+          currentSection += el.text + '\n\n';
+          currentSubHeadingPath = updateHeadingPath(currentSubHeadingPath, el.text, level);
+        } else if (level === 1) {
+          // 一级标题：累积（可能以一级标题开头）
+          currentSection += el.text + '\n\n';
+        }
+      } else if (el.tagName === 'table') {
+        currentSection += el.text + '\n\n';
+      } else if (el.tagName === 'ul' || el.tagName === 'ol') {
+        currentSection += el.text + '\n';
+      } else if (el.tagName === 'p') {
+        currentSection += el.text + '\n\n';
+      }
+    }
+
+    if (currentSection.trim()) {
+      results.push({ text: currentSection.trim(), headingPath: currentSubHeadingPath });
+    }
+
+    if (!hasSubHeading && results.length === 0 && content.trim()) {
+      results.push({ text: stripHtmlTags(content), headingPath: [] });
+    }
+
+    return results;
   }
-  return parts;
+
+  // 纯文本格式：尝试识别编号段落
+  return extractSubHeadingsFromText(content);
+}
+
+/**
+ * 从纯文本识别二级编号段落（如 1.1、2.1 等）
+ */
+function extractSubHeadingsFromText(content: string): { text: string; headingPath: string[] }[] {
+  const lines = content.split('\n');
+  const results: { text: string; headingPath: string[] }[] = [];
+  let currentSection = '';
+  let currentHeadingPath: string[] = [];
+  let hasSubHeading = false;
+
+  // 二级编号模式：1.1、2.1、1.1.1 等
+  const subHeadingPattern = /^(\d+\.\d+[\.\d]*)\s+/;
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    const match = trimmedLine.match(subHeadingPattern);
+
+    if (match) {
+      // 找到二级编号段落
+      if (currentSection.trim()) {
+        results.push({ text: currentSection.trim(), headingPath: currentHeadingPath });
+      }
+      const headingNum = match[1];
+      const headingText = trimmedLine;
+      currentHeadingPath = [headingText];
+      currentSection = headingText + '\n';
+      hasSubHeading = true;
+    } else {
+      // 其他内容累积到当前段落
+      currentSection += line + '\n';
+    }
+  }
+
+  if (currentSection.trim()) {
+    results.push({ text: currentSection.trim(), headingPath: currentHeadingPath });
+  }
+
+  // 无二级编号时，按段落切分
+  if (!hasSubHeading && results.length === 0) {
+    // 按双换行切分段落
+    const paragraphs = content.split(/\n\n+/).filter(p => p.trim());
+    for (const para of paragraphs) {
+      results.push({ text: para.trim(), headingPath: [] });
+    }
+  }
+
+  return results;
 }

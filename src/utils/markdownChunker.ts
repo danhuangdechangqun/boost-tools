@@ -20,7 +20,6 @@ function updateHeadingPath(
   headingText: string,
   level: number
 ): string[] {
-  // 标题层级变化时，截断到对应层级再追加
   const newPath = currentPath.slice(0, level - 1);
   newPath.push(headingText);
   return newPath;
@@ -48,127 +47,33 @@ function createBoundary(
 }
 
 /**
- * Markdown AST 解析切分
+ * 渲染 token 为文本
  */
-export function markdownChunker(
-  text: string,
-  maxSize: number = 800
-): BoundaryResult[] {
-  const tokens = marked.lexer(text);
-  const results: BoundaryResult[] = [];
-  let currentHeadingPath: string[] = [];
-  let currentLevel = 0;
-  let currentContent = '';
-  let currentType: BoundaryType = 'paragraph';
+function renderToken(token: Token): string {
+  switch (token.type) {
+    case 'heading':
+      const prefix = '#'.repeat(token.depth);
+      return `${prefix} ${token.text || ''}\n\n`;
 
-  for (const token of tokens) {
-    switch (token.type) {
-      case 'heading': {
-        // 保存之前累积的内容
-        if (currentContent.trim()) {
-          results.push(createBoundary(currentContent, currentType, currentHeadingPath, currentLevel));
-        }
+    case 'code':
+      const lang = token.lang || '';
+      return `\`\`\`${lang}\n${token.text || ''}\n\`\`\`\n\n`;
 
-        // 更新标题路径和层级
-        const headingText = token.text || '';
-        currentLevel = token.depth;
-        currentHeadingPath = updateHeadingPath(currentHeadingPath, headingText, currentLevel);
+    case 'table':
+      return renderTableToken(token) + '\n';
 
-        // 开始新的标题段落
-        currentContent = `# ${headingText}\n`;
-        currentType = 'heading';
-        break;
-      }
+    case 'list':
+      return renderListToken(token) + '\n';
 
-      case 'code': {
-        // 代码块独立成片
-        const codeContent = token.text || '';
-        const lang = token.lang || '';
-        const fullCode = `\`\`\`${lang}\n${codeContent}\n\`\`\`\n`;
+    case 'paragraph':
+      return (token.text || '') + '\n\n';
 
-        results.push(createBoundary(fullCode, 'code', currentHeadingPath));
-        break;
-      }
+    case 'hr':
+      return '---\n\n';
 
-      case 'table': {
-        // 表格独立成片
-        const tableContent = renderTableToken(token);
-        results.push(createBoundary(tableContent, 'table', currentHeadingPath));
-        break;
-      }
-
-      case 'list': {
-        // 列表独立成片
-        const listContent = renderListToken(token);
-        results.push(createBoundary(listContent, 'list', currentHeadingPath));
-        break;
-      }
-
-      case 'paragraph': {
-        // 段落累积到当前内容
-        const textContent = token.text || '';
-        currentContent += textContent + '\n';
-        break;
-      }
-
-      case 'hr': {
-        // 分隔线作为边界
-        if (currentContent.trim()) {
-          results.push(createBoundary(currentContent, currentType, currentHeadingPath, currentLevel));
-        }
-        currentContent = '';
-        currentType = 'paragraph';
-        break;
-      }
-
-      default:
-        // 其他类型忽略或累积
-        break;
-    }
+    default:
+      return '';
   }
-
-  // 保存最后累积的内容
-  if (currentContent.trim()) {
-    results.push(createBoundary(currentContent, currentType, currentHeadingPath, currentLevel));
-  }
-
-  // 处理超长段落（代码块、表格、列表不拆分）
-  const finalResults: BoundaryResult[] = [];
-  for (const r of results) {
-    if (r.content.length > maxSize && r.boundaryType === 'paragraph') {
-      // 超长普通段落按字符拆分
-      const subParts = splitBySize(r.content, maxSize);
-      let pos = 0;
-      for (const sub of subParts) {
-        finalResults.push({
-          content: sub,
-          start: r.start + pos,
-          end: r.start + pos + sub.length,
-          boundaryType: r.boundaryType,
-          metadata: r.metadata
-        });
-        pos += sub.length;
-      }
-    } else {
-      finalResults.push(r);
-    }
-  }
-
-  return finalResults;
-}
-
-/**
- * 按固定大小拆分超长内容
- */
-function splitBySize(content: string, size: number): string[] {
-  const parts: string[] = [];
-  let start = 0;
-  while (start < content.length) {
-    const end = Math.min(start + size, content.length);
-    parts.push(content.slice(start, end).trim());
-    start = end;
-  }
-  return parts;
 }
 
 /**
@@ -196,7 +101,7 @@ function renderTableToken(token: Token): string {
     }
   }
 
-  return rows.join('\n') + '\n';
+  return rows.join('\n');
 }
 
 /**
@@ -207,16 +112,109 @@ function renderListToken(token: Token): string {
 
   const list = token as Tokens.List;
   const items: string[] = [];
-  const indent = list.loose ? '' : '  ';
 
-  // 有序列表的起始序号
   let itemIndex = list.start || 1;
   for (const item of list.items || []) {
     const prefix = list.ordered ? `${itemIndex}. ` : '- ';
     const text = item.text || '';
-    items.push(indent + prefix + text);
+    items.push(prefix + text);
     if (list.ordered) itemIndex++;
   }
 
-  return items.join('\n') + '\n';
+  return items.join('\n');
+}
+
+/**
+ * Markdown AST 解析切分 - BigChunk 级别
+ * 只识别一级标题（depth=1）作为 BigChunk 边界
+ */
+export function markdownChunker(
+  text: string
+): BoundaryResult[] {
+  const tokens = marked.lexer(text);
+  const results: BoundaryResult[] = [];
+  let currentBigChunk = '';
+  let currentHeadingPath: string[] = [];
+  let hasTopLevelHeading = false;
+
+  for (const token of tokens) {
+    if (token.type === 'heading') {
+      if (token.depth === 1) {
+        // 一级标题：保存之前的 BigChunk，开始新的
+        if (currentBigChunk.trim()) {
+          results.push(createBoundary(currentBigChunk, 'heading', currentHeadingPath, 1));
+        }
+        currentHeadingPath = [token.text || ''];
+        currentBigChunk = renderToken(token);
+        hasTopLevelHeading = true;
+      } else {
+        // 子标题：累积到当前 BigChunk
+        currentBigChunk += renderToken(token);
+      }
+    } else {
+      // 其他内容累积到当前 BigChunk
+      currentBigChunk += renderToken(token);
+    }
+  }
+
+  // 保存最后的 BigChunk
+  if (currentBigChunk.trim()) {
+    results.push(createBoundary(currentBigChunk, 'heading', currentHeadingPath, 1));
+  }
+
+  // 无一级标题时，整文档作为一个 BigChunk
+  if (!hasTopLevelHeading && results.length === 0 && text.trim()) {
+    results.push(createBoundary(text, 'paragraph', [], undefined));
+  }
+
+  return results;
+}
+
+/**
+ * 在 BigChunk 内识别二级标题边界，返回子标题段落列表
+ * 用于 SmallChunk 切分参考
+ */
+export function extractSubHeadings(content: string): { text: string; headingPath: string[] }[] {
+  const tokens = marked.lexer(content);
+  const results: { text: string; headingPath: string[] }[] = [];
+  let currentSection = '';
+  let currentSubHeadingPath: string[] = [];
+  let hasSubHeading = false;
+
+  for (const token of tokens) {
+    if (token.type === 'heading') {
+      if (token.depth === 2) {
+        // 二级标题：保存之前的段落，开始新的
+        if (currentSection.trim()) {
+          results.push({ text: currentSection.trim(), headingPath: currentSubHeadingPath });
+        }
+        currentSubHeadingPath = [token.text || ''];
+        currentSection = renderToken(token);
+        hasSubHeading = true;
+      } else if (token.depth >= 3) {
+        // 三级及以下标题：累积到当前段落
+        currentSection += renderToken(token);
+        // 更新子标题路径
+        currentSubHeadingPath = updateHeadingPath(currentSubHeadingPath, token.text || '', token.depth);
+      } else if (token.depth === 1) {
+        // 一级标题：累积（BigChunk 可能以一级标题开头）
+        currentSection += renderToken(token);
+      }
+    } else {
+      // 其他内容累积到当前段落
+      currentSection += renderToken(token);
+    }
+  }
+
+  // 保存最后的段落
+  if (currentSection.trim()) {
+    results.push({ text: currentSection.trim(), headingPath: currentSubHeadingPath });
+  }
+
+  // 无二级标题时，返回整体内容
+  if (!hasSubHeading && results.length === 0 && content.trim()) {
+    results.push({ text: content.trim(), headingPath: [] });
+  }
+
+  return results;
 }

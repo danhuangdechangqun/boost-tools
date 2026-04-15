@@ -1,14 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
 import { BigChunk, SmallChunk, BoundaryType, DocumentType } from '@/views/ai/KnowledgeBasePage/types';
-import { markdownChunker } from './markdownChunker';
-import { docxChunker } from './docxChunker';
+import { markdownChunker, extractSubHeadings } from './markdownChunker';
+import { docxChunker, extractSubHeadingsFromHtml } from './docxChunker';
 
 // 编号模式正则
 const NUMBERED_PATTERNS = [
   /^\d+\.\s*/,           // "1. xxx"
   /^第\d+点\s*/,          // "第1点 xxx"
   /^步骤\d+\s*/,          // "步骤1 xxx"
-  /^第\d+条\s*/,          // "第1条 xxx"
+  /^第\d+条\s*/,          // "第X条 xxx"
 ];
 
 // 边界检测结果
@@ -21,6 +21,12 @@ interface BoundaryResult {
     headingPath?: string[];
     headingLevel?: number;
   };
+}
+
+// 子标题段落结果
+interface SubSection {
+  text: string;
+  headingPath: string[];
 }
 
 /**
@@ -88,53 +94,137 @@ export function detectNewlineBoundaries(text: string, mode: 'double' | 'single')
 }
 
 /**
- * 将BigChunk内容切分成多个SmallChunk
+ * 滑窗重叠切分超长内容
  */
-export function splitSmallChunks(
+function splitBySizeWithOverlap(
   content: string,
-  smallSize: number,
-  overlap: number,
-  bigChunkId: string = '',
-  documentId: string = ''
-): Omit<SmallChunk, 'id'>[] {
-  if (content.length <= smallSize) {
-    return [{
-      documentId,
-      bigChunkId,
-      content: content.trim(),
-      embedding: undefined,
-      position: { start: 0, end: content.length, index: 0 }
-    }];
-  }
-
-  const chunks: Omit<SmallChunk, 'id'>[] = [];
+  size: number,
+  overlap: number
+): string[] {
+  const parts: string[] = [];
   let start = 0;
-  let index = 0;
 
   while (start < content.length) {
-    const end = Math.min(start + smallSize, content.length);
-    const chunkContent = content.slice(start, end).trim();
+    const end = Math.min(start + size, content.length);
+    parts.push(content.slice(start, end).trim());
 
-    if (chunkContent) {
+    // 滑窗：下一个片段起始位置 = 当前结束位置 - 重叠字符
+    start = end - overlap;
+    if (start >= content.length - overlap) break;
+  }
+
+  return parts.filter(p => p.length > 0);
+}
+
+/**
+ * SmallChunk 语义切分：在 BigChunk 内按二级标题切分
+ * 超长段落用滑窗重叠
+ */
+export function splitSmallChunksSemantically(
+  content: string,
+  smallChunkSize: number,
+  overlap: number,
+  bigChunkId: string,
+  documentId: string,
+  docType: DocumentType,
+  bigChunkHeadingPath: string[] = []
+): Omit<SmallChunk, 'id'>[] {
+  // 1. 根据文档类型识别二级标题边界
+  let subSections: SubSection[] = [];
+
+  if (docType === 'md') {
+    subSections = extractSubHeadings(content);
+  } else if (docType === 'docx') {
+    subSections = extractSubHeadingsFromHtml(content);
+  } else {
+    // TXT/PDF/JSON：按段落或编号切分
+    subSections = extractParagraphs(content);
+  }
+
+  // 2. 每个二级标题段落作为一个 SmallChunk
+  // 3. 超长的用滑窗重叠切分
+  const chunks: Omit<SmallChunk, 'id'>[] = [];
+  let index = 0;
+
+  for (const section of subSections) {
+    // 组合完整的 headingPath：BigChunk 路径 + 子标题路径
+    const fullHeadingPath = [...bigChunkHeadingPath, ...section.headingPath];
+
+    if (section.text.length <= smallChunkSize) {
+      // 不超长：直接作为一个 SmallChunk
       chunks.push({
         documentId,
         bigChunkId,
-        content: chunkContent,
+        content: section.text.trim(),
         embedding: undefined,
-        position: { start, end, index }
+        position: { start: 0, end: section.text.length, index },
+        metadata: { heading: fullHeadingPath.join(' > ') }
       });
       index++;
+    } else {
+      // 超长：滑窗重叠切分
+      const parts = splitBySizeWithOverlap(section.text, smallChunkSize, overlap);
+      for (const part of parts) {
+        chunks.push({
+          documentId,
+          bigChunkId,
+          content: part,
+          embedding: undefined,
+          position: { start: 0, end: part.length, index },
+          metadata: { heading: fullHeadingPath.join(' > ') }
+        });
+        index++;
+      }
     }
-
-    start = end - overlap;
-    if (start >= content.length - overlap) break;
   }
 
   return chunks;
 }
 
 /**
- * 根据文档类型切分BigChunk
+ * 从文本中提取段落（用于 TXT/PDF/JSON）
+ */
+function extractParagraphs(content: string): SubSection[] {
+  // 尝试识别二级编号段落（如 1.1、2.1）
+  const subHeadingPattern = /^(\d+\.\d+[\.\d]*)\s+/;
+  const lines = content.split('\n');
+  const results: SubSection[] = [];
+  let currentSection = '';
+  let currentHeadingPath: string[] = [];
+  let hasSubHeading = false;
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    const match = trimmedLine.match(subHeadingPattern);
+
+    if (match) {
+      // 找到二级编号段落
+      if (currentSection.trim()) {
+        results.push({ text: currentSection.trim(), headingPath: currentHeadingPath });
+      }
+      currentHeadingPath = [trimmedLine];
+      currentSection = line + '\n';
+      hasSubHeading = true;
+    } else {
+      currentSection += line + '\n';
+    }
+  }
+
+  if (currentSection.trim()) {
+    results.push({ text: currentSection.trim(), headingPath: currentHeadingPath });
+  }
+
+  // 无二级编号时，按双换行切分段落
+  if (!hasSubHeading) {
+    const paragraphs = content.split(/\n\n+/).filter(p => p.trim());
+    return paragraphs.map(p => ({ text: p.trim(), headingPath: [] }));
+  }
+
+  return results;
+}
+
+/**
+ * 根据文档类型切分BigChunk - 只识别一级标题边界
  */
 export function splitBigChunks(
   text: string,
@@ -146,21 +236,18 @@ export function splitBigChunks(
 
   switch (docType) {
     case 'md':
-      boundaries = markdownChunker(text, maxSize);
+      boundaries = markdownChunker(text);
       break;
 
     case 'docx':
-      // Word 使用 HTML 解析
-      boundaries = html ? docxChunker(html, maxSize) : detectNewlineBoundaries(text, 'double');
+      boundaries = html ? docxChunker(html) : detectNewlineBoundaries(text, 'double');
       break;
 
     case 'txt':
-      boundaries = detectNumberedBoundaries(text);
+      // TXT：尝试识别一级编号段落
+      boundaries = detectTopLevelNumberedBoundaries(text);
       if (boundaries.length === 0) {
         boundaries = detectNewlineBoundaries(text, 'double');
-      }
-      if (boundaries.length === 0) {
-        boundaries = detectNewlineBoundaries(text, 'single');
       }
       break;
 
@@ -169,7 +256,6 @@ export function splitBigChunks(
       break;
 
     case 'json':
-      // JSON 不切分
       boundaries = [{
         content: text,
         start: 0,
@@ -182,51 +268,61 @@ export function splitBigChunks(
       boundaries = detectNewlineBoundaries(text, 'double');
   }
 
-  // 处理超长段落（已在各切分器中处理，这里作为兜底）
-  const finalBoundaries: BoundaryResult[] = [];
-  for (const b of boundaries) {
-    if (b.content.length > maxSize &&
-        b.boundaryType !== 'code' &&
-        b.boundaryType !== 'table' &&
-        b.boundaryType !== 'list') {
-      const subParts = splitContentBySize(b.content, maxSize);
-      let subPosition = b.start;
-      for (const subPart of subParts) {
-        finalBoundaries.push({
-          content: subPart,
-          start: subPosition,
-          end: subPosition + subPart.length,
-          boundaryType: b.boundaryType,
-          metadata: b.metadata  // 保留 metadata
-        });
-        subPosition += subPart.length;
-      }
-    } else {
-      finalBoundaries.push(b);
-    }
-  }
-
-  return finalBoundaries;
+  return boundaries;
 }
 
 /**
- * 按固定大小切分超长内容
+ * 检测一级编号段落边界（如 1.、2. 等）
  */
-function splitContentBySize(content: string, size: number): string[] {
-  const parts: string[] = [];
-  let start = 0;
+function detectTopLevelNumberedBoundaries(text: string): BoundaryResult[] {
+  const lines = text.split('\n');
+  const results: BoundaryResult[] = [];
+  let position = 0;
+  let currentContent = '';
+  let currentStart = 0;
 
-  while (start < content.length) {
-    const end = Math.min(start + size, content.length);
-    parts.push(content.slice(start, end).trim());
-    start = end;
+  // 一级编号模式：单独的数字加点，如 "1."、"2."
+  const topLevelPattern = /^(\d+)\.\s+/;
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    const match = trimmedLine.match(topLevelPattern);
+
+    if (match) {
+      // 找到一级编号：保存之前的段落，开始新的
+      if (currentContent.trim()) {
+        results.push({
+          content: currentContent.trim(),
+          start: currentStart,
+          end: position,
+          boundaryType: 'numbered'
+        });
+      }
+      currentContent = line + '\n';
+      currentStart = position;
+    } else {
+      // 其他内容累积到当前段落
+      currentContent += line + '\n';
+    }
+
+    position += line.length + 1;
   }
 
-  return parts;
+  // 保存最后的段落
+  if (currentContent.trim()) {
+    results.push({
+      content: currentContent.trim(),
+      start: currentStart,
+      end: text.length,
+      boundaryType: 'numbered'
+    });
+  }
+
+  return results;
 }
 
 /**
- * 完整文档切分：Big Chunk -> Small Chunk
+ * 完整文档切分：Big Chunk -> Small Chunk（语义切分）
  */
 export function chunkDocument(
   content: string,
@@ -244,12 +340,15 @@ export function chunkDocument(
   const bigChunks: BigChunk[] = bigBoundaries.map((b, bigIndex) => {
     const bigChunkId = uuidv4();
 
-    const smallChunksRaw = splitSmallChunks(
+    // 使用语义切分替代纯字符切分
+    const smallChunksRaw = splitSmallChunksSemantically(
       b.content,
       config.smallChunkSize,
       config.smallChunkOverlap,
       bigChunkId,
-      documentId
+      documentId,
+      docType,
+      b.metadata?.headingPath || []
     );
 
     const smallChunks: SmallChunk[] = smallChunksRaw.map((s, smallIndex) => ({
@@ -269,7 +368,7 @@ export function chunkDocument(
         index: bigIndex
       },
       boundaryType: b.boundaryType,
-      metadata: b.metadata  // 传递 metadata
+      metadata: b.metadata
     };
   });
 
