@@ -90,11 +90,24 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
   }, []);
 
   const handleAdd = async (values: any) => {
+    const today = dayjs().format('YYYY-MM-DD');
+    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
+
+    // 根据分组设置正确的dueDate，避免autoMigrateTodos误迁移
+    let dueDate = values.dueDate;
+    if (!dueDate) {
+      if (values.group === 'tomorrow') {
+        dueDate = tomorrow;
+      } else {
+        dueDate = today;
+      }
+    }
+
     const todo: Omit<TodoItem, 'id' | 'createTime'> = {
       title: values.title,
       description: values.description,
       status: 'pending',
-      dueDate: values.dueDate || dayjs().format('YYYY-MM-DD'),
+      dueDate: dueDate,
       group: values.group || 'today',
     };
     await addTodo(todo);

@@ -302,7 +302,7 @@ export function useAgentOrchestrator(config: AgentConfig = DEFAULT_AGENT_CONFIG)
 
     try {
       // ===== 意图路由拦截 =====
-      intentResult = await intentRouter.routeIntent(userInput, context?.knowledgeContext);
+      intentResult = await intentRouter.routeIntent(userInput, context?.knowledgeContext, knowledgeBaseReady);
 
       localAddLog({
         phase: 'planning',

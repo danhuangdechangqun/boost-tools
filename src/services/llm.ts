@@ -74,6 +74,13 @@ const callLlmFallback = async (prompt: string, options?: { maxTokens?: number })
   const isDev = typeof window !== 'undefined' &&
     (window.location?.hostname === 'localhost' || window.location?.hostname === '127.0.0.1');
 
+  // 创建超时控制器（60秒超时）
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    console.log('[LLM] 请求超时，正在中止...');
+    controller.abort();
+  }, 60000);
+
   try {
     const format = cachedConfig?.format || 'anthropic';
     let endpoint = buildEndpoint(cachedConfig!.apiUrl, format);
@@ -118,8 +125,11 @@ const callLlmFallback = async (prompt: string, options?: { maxTokens?: number })
     const response = await fetch(endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal  // 添加超时信号
     });
+
+    clearTimeout(timeoutId);  // 清除超时计时器
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -140,8 +150,23 @@ const callLlmFallback = async (prompt: string, options?: { maxTokens?: number })
     console.log('LLM Response:', { success: true, contentLength: content.length });
     return { success: true, content };
   } catch (error: any) {
+    clearTimeout(timeoutId);  // 清除超时计时器
     console.error('LLM Fetch Error:', error);
-    return { success: false, error: `网络错误: ${error.message}` };
+
+    // 区分不同类型的网络错误，提供更精确的提示
+    let errorMessage = error.message || '未知错误';
+
+    if (errorMessage === 'Failed to fetch') {
+      errorMessage = '网络连接失败，请检查：\n1. 网络是否正常\n2. API 地址是否正确\n3. 如在生产环境，请确保已配置正确的 API 代理';
+    } else if (errorMessage.includes('CORS') || errorMessage.includes('cross-origin') || errorMessage.includes('跨域')) {
+      errorMessage = 'CORS 跨域错误，请在设置中检查 API 地址，或使用桌面应用';
+    } else if (error.name === 'AbortError' || errorMessage.includes('abort') || errorMessage.includes('超时')) {
+      errorMessage = '请求超时，请稍后重试或检查网络状况';
+    } else if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('getaddrinfo')) {
+      errorMessage = 'API 地址无法解析，请检查地址是否正确';
+    }
+
+    return { success: false, error: `网络错误: ${errorMessage}` };
   }
 };
 

@@ -67,6 +67,13 @@ export async function getEmbedding(texts: string | string[]): Promise<number[][]
     throw new Error('未配置向量模型 API Key，请在设置中配置');
   }
 
+  // 创建超时控制器（30秒超时）
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    console.log('[Embedding] 请求超时，正在中止...');
+    controller.abort();
+  }, 30000);
+
   // 开发环境通过 Vite 代理，生产环境直接调用
   const isDev = import.meta.env.DEV;
   const apiUrl = isDev
@@ -74,6 +81,9 @@ export async function getEmbedding(texts: string | string[]): Promise<number[][]
     : 'https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding';
 
   try {
+    console.log('[Embedding] 开始请求:', { model, textCount: input.length });
+    const startTime = Date.now();
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -88,8 +98,11 @@ export async function getEmbedding(texts: string | string[]): Promise<number[][]
         parameters: {
           text_type: 'query'  // query 用于检索，document 用于入库
         }
-      })
+      }),
+      signal: controller.signal  // 添加超时信号
     });
+
+    clearTimeout(timeoutId);  // 清除超时计时器
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -104,12 +117,26 @@ export async function getEmbedding(texts: string | string[]): Promise<number[][]
     }
 
     // 按 text_index 排序返回向量
-    return data.output.embeddings
+    const embeddings = data.output.embeddings
       .sort((a, b) => a.text_index - b.text_index)
       .map(item => item.embedding);
-  } catch (error) {
-    console.error('Embedding 调用错误:', error);
-    throw error;
+
+    console.log(`[Embedding] 请求完成，耗时 ${Date.now() - startTime}ms`);
+    return embeddings;
+  } catch (error: any) {
+    clearTimeout(timeoutId);  // 清除超时计时器
+
+    // 区分不同类型的错误
+    let errorMessage = error.message || '未知错误';
+
+    if (error.name === 'AbortError' || errorMessage.includes('abort')) {
+      errorMessage = 'Embedding API 请求超时（30秒），请检查网络状况';
+    } else if (errorMessage === 'Failed to fetch') {
+      errorMessage = 'Embedding API 网络连接失败，请检查网络和 API 配置';
+    }
+
+    console.error('[Embedding] 调用错误:', errorMessage);
+    throw new Error(errorMessage);
   }
 }
 

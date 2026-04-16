@@ -45,8 +45,9 @@ export const TOOL_KEYWORDS: Record<string, {
     patterns: [/分析.*反馈/i, /反馈.*分析/i]
   },
   ticket: {
-    keywords: ['工单', 'ticket', '工单分析', '故障分析'],
-    patterns: [/分析.*工单/i, /工单.*分析/i]
+    // 只有明确要"分析工单数据"才匹配，单纯提到工单不匹配（可能是查询知识库）
+    keywords: ['工单分析', '分析工单数据', 'ticket分析'],
+    patterns: [/分析.*工单数据/i, /工单数据.*分析/i]
   },
   todo: {
     keywords: ['待办', 'todo', '任务', '今日待办', '明日待办', '下周计划'],
