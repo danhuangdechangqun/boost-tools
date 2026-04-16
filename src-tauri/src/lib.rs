@@ -33,6 +33,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             llm::test_llm_connection,
             llm::call_llm,
+            llm::get_embeddings,
             storage::read_json_file,
             storage::write_json_file,
             storage::delete_json_file,

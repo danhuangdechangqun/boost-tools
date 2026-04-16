@@ -1,6 +1,7 @@
-//! LLM API 服务模块
+//! LLM & Embedding API 服务模块
 //!
 //! 支持 Anthropic Messages 和 OpenAI Chat Completions 两种 API 格式
+//! 支持阿里云 DashScope Embedding API
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -18,6 +19,35 @@ pub struct LlmConfig {
 
 fn default_format() -> String {
     "anthropic".to_string()
+}
+
+/// Embedding 配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingConfig {
+    pub api_key: String,
+    #[serde(default = "default_embedding_model")]
+    pub model: String,
+}
+
+fn default_embedding_model() -> String {
+    "text-embedding-v3".to_string()
+}
+
+/// Embedding 请求参数
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingRequest {
+    pub config: EmbeddingConfig,
+    pub texts: Vec<String>,
+}
+
+/// Embedding 响应结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingResponse {
+    pub success: bool,
+    pub embeddings: Option<Vec<Vec<f64>>>,
+    pub error: Option<String>,
 }
 
 /// LLM 响应结果
@@ -155,6 +185,123 @@ pub async fn call_llm(config: LlmConfig, prompt: &str, max_tokens: Option<u32>) 
     Ok(LlmResponse {
         success: true,
         content,
+        error: None,
+    })
+}
+
+/// DashScope Embedding API 响应结构
+#[derive(Debug, Deserialize)]
+struct DashScopeEmbeddingOutput {
+    embeddings: Vec<DashScopeEmbeddingItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DashScopeEmbeddingItem {
+    text_index: u32,
+    embedding: Vec<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DashScopeEmbeddingResponse {
+    output: DashScopeEmbeddingOutput,
+    #[serde(default)]
+    code: Option<String>,
+    #[serde(default)]
+    message: Option<String>,
+}
+
+/// 获取文本向量（调用阿里云 DashScope Embedding API）
+#[tauri::command]
+pub async fn get_embeddings(request: EmbeddingRequest) -> Result<EmbeddingResponse, String> {
+    if request.config.api_key.is_empty() {
+        return Ok(EmbeddingResponse {
+            success: false,
+            embeddings: None,
+            error: Some("未配置 Embedding API Key".to_string()),
+        });
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let endpoint = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding";
+
+    let body = serde_json::json!({
+        "model": request.config.model,
+        "input": {
+            "texts": request.texts
+        },
+        "parameters": {
+            "text_type": "query"
+        }
+    });
+
+    let response = client
+        .post(endpoint)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", request.config.api_key))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("网络错误: {}", e))?;
+
+    let status = response.status();
+
+    if !status.is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
+            let message = error_json["message"]
+                .as_str()
+                .or_else(|| error_json["code"].as_str())
+                .unwrap_or(&error_text);
+            return Ok(EmbeddingResponse {
+                success: false,
+                embeddings: None,
+                error: Some(format!("API错误 {}: {}", status.as_u16(), message)),
+            });
+        }
+        return Ok(EmbeddingResponse {
+            success: false,
+            embeddings: None,
+            error: Some(format!("API错误 {}: {}", status.as_u16(), error_text)),
+        });
+    }
+
+    let data: DashScopeEmbeddingResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("解析响应失败: {}", e))?;
+
+    // 检查错误码
+    if let Some(code) = data.code {
+        if code != "Success" {
+            return Ok(EmbeddingResponse {
+                success: false,
+                embeddings: None,
+                error: Some(format!("API错误: {}", data.message.unwrap_or_default())),
+            });
+        }
+    }
+
+    // 按 text_index 排序
+    let mut embeddings_with_index: Vec<(u32, Vec<f64>)> = data
+        .output
+        .embeddings
+        .into_iter()
+        .map(|e| (e.text_index, e.embedding))
+        .collect();
+    embeddings_with_index.sort_by_key(|(index, _)| *index);
+
+    let embeddings: Vec<Vec<f64>> = embeddings_with_index
+        .into_iter()
+        .map(|(_, emb)| emb)
+        .collect();
+
+    Ok(EmbeddingResponse {
+        success: true,
+        embeddings: Some(embeddings),
         error: None,
     })
 }

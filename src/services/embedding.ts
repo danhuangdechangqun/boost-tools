@@ -1,6 +1,8 @@
 // 阿里云 DashScope Embedding 服务
 // API Key 和模型名从配置中读取
+// 开发环境通过 Vite 代理，生产环境通过 Tauri 后端调用
 
+import { invoke } from '@tauri-apps/api/core';
 import { getConfig } from './api';
 
 // 默认模型名（配置为空时使用）
@@ -67,6 +69,41 @@ export async function getEmbedding(texts: string | string[]): Promise<number[][]
     throw new Error('未配置向量模型 API Key，请在设置中配置');
   }
 
+  // 开发环境通过 Vite 代理，生产环境通过 Tauri 后端
+  const isDev = import.meta.env.DEV;
+
+  console.log('[Embedding] 开始请求:', { model, textCount: input.length, isDev });
+  const startTime = Date.now();
+
+  if (!isDev) {
+    // 生产环境：通过 Tauri 后端调用，绕过 CORS
+    try {
+      const response = await invoke<{
+        success: boolean;
+        embeddings: number[][] | null;
+        error: string | null;
+      }>('get_embeddings', {
+        request: {
+          config: { apiKey, model },
+          texts: input
+        }
+      });
+
+      if (!response.success || !response.embeddings) {
+        throw new Error(response.error || 'Embedding API 调用失败');
+      }
+
+      console.log(`[Embedding] Tauri 后端请求完成，耗时 ${Date.now() - startTime}ms`);
+      return response.embeddings;
+    } catch (error: any) {
+      console.error('[Embedding] Tauri 后端调用错误:', error);
+      throw new Error(error.message || 'Embedding API 调用失败');
+    }
+  }
+
+  // 开发环境：通过 Vite 代理调用
+  const apiUrl = '/api/dashscope/api/v1/services/embeddings/text-embedding/text-embedding';
+
   // 创建超时控制器（30秒超时）
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
@@ -74,16 +111,7 @@ export async function getEmbedding(texts: string | string[]): Promise<number[][]
     controller.abort();
   }, 30000);
 
-  // 开发环境通过 Vite 代理，生产环境直接调用
-  const isDev = import.meta.env.DEV;
-  const apiUrl = isDev
-    ? '/api/dashscope/api/v1/services/embeddings/text-embedding/text-embedding'
-    : 'https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding';
-
   try {
-    console.log('[Embedding] 开始请求:', { model, textCount: input.length });
-    const startTime = Date.now();
-
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -121,7 +149,7 @@ export async function getEmbedding(texts: string | string[]): Promise<number[][]
       .sort((a, b) => a.text_index - b.text_index)
       .map(item => item.embedding);
 
-    console.log(`[Embedding] 请求完成，耗时 ${Date.now() - startTime}ms`);
+    console.log(`[Embedding] Vite 代理请求完成，耗时 ${Date.now() - startTime}ms`);
     return embeddings;
   } catch (error: any) {
     clearTimeout(timeoutId);  // 清除超时计时器
