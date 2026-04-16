@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { IntentRouterResult, IntentType, IntentRouterConfig, DEFAULT_INTENT_ROUTER_CONFIG } from '../types';
 import { matchToolKeywords, detectExplicitIntent, ALL_TOOL_NAMES } from '../config/toolKeywords';
+import { detectDataPattern } from '../config/dataPatterns';
 import { callLlm, getSingleEmbedding, getBatchEmbeddings } from '@/services/api';
 import { storage } from '@/services/storage';
 import { Document, RAGConfig, DEFAULT_RAG_CONFIG, SmallChunk } from '@/views/ai/KnowledgeBasePage/types';
@@ -137,7 +138,23 @@ export function useIntentRouter(config: IntentRouterConfig = DEFAULT_INTENT_ROUT
         }
       }
 
-      // 3. 知识库相似度检测（优先级最高）
+      // 3. 数据模式识别（新增：优先级高于知识库）
+      // 自动识别用户输入的数据格式，如多行数字列表、JSON、XML等
+      const dataPatternResult = detectDataPattern(userInput);
+      if (dataPatternResult && dataPatternResult.confidence >= 0.80) {
+        const intentType = TOOL_NAME_TO_INTENT[dataPatternResult.suggestedTool];
+        if (intentType) {
+          console.log('[意图路由] 数据模式识别命中:', dataPatternResult.pattern, '-> 工具:', intentType);
+          return {
+            type: 'tool',
+            tool: intentType,
+            confidence: dataPatternResult.confidence,
+            extractedData: dataPatternResult.extractedData
+          };
+        }
+      }
+
+      // 4. 知识库相似度检测（优先级降低，在数据模式检测之后）
       // 如果知识库就绪，自动获取知识库数据进行相似度检测
       let localKnowledgeContext: KnowledgeBaseContext | null = knowledgeContext || null;
 
@@ -238,14 +255,20 @@ async function classifyIntentWithLLM(userInput: string): Promise<{ tool?: string
 - crypto: 计算MD5/SHA哈希值
 - regex: 生成正则表达式
 - cron: 生成定时任务表达式
-- sql_in: 将数据转换为SQL IN格式
+- sql_in: 将数据转换为SQL IN格式（将列表数据拼接成 ('a','b','c') 格式）
 - text_diff: 对比两段文本差异
 - knowledge: 查询知识库文档（如果用户在提问问题，很可能是要查询知识库）
 - feedback: 分析用户反馈数据（需要用户提供反馈数据）
 - ticket: 分析工单数据（需要用户提供工单数据表格）
 - todo: 添加待办任务
 
-重要区分：
+【重要数据模式识别规则】：
+1. 如果用户输入是多行数字或编码列表（如行政区划代码、ID列表），应识别为 sql_in
+2. 如果用户输入是JSON/XML格式的数据，应识别为对应的格式化工具
+3. 纯数据输入（无明确问题语义）优先匹配工具，而非知识库查询
+4. 只有用户在提问问题、寻求解释时，才判断为 knowledge
+
+【重要区分】：
 - "工单分析"工具是用于分析用户提供的数据表格，不是回答工单相关问题
 - 如果用户只是提问问题（如"为什么工单看不到"），这是知识库查询，不是工单分析
 - "反馈分析"工具是用于分析用户反馈数据，不是回答反馈相关问题
@@ -254,7 +277,7 @@ async function classifyIntentWithLLM(userInput: string): Promise<{ tool?: string
 
 请以JSON格式返回结果：
 {
-  "tool": "工具名（如果是提问问题，优先判断为knowledge；如果不确定，填null）",
+  "tool": "工具名（如果是纯数据输入，优先匹配对应工具；如果是提问问题，判断为knowledge；如果不确定，填null）",
   "confidence": 0.0-1.0之间的置信度
 }
 

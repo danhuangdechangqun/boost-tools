@@ -1,20 +1,25 @@
 // 工具关键词配置 - 用于快速匹配用户意图
 
-export const TOOL_KEYWORDS: Record<string, {
+export interface ToolKeywordConfig {
   keywords: string[];
   patterns: RegExp[];
-}> = {
+  dataPattern?: string;  // 新增：关联的数据模式类型
+}
+
+export const TOOL_KEYWORDS: Record<string, ToolKeywordConfig> = {
   uuid: {
     keywords: ['uuid', '唯一id', '生成id', '随机id', 'guid', '唯一标识'],
     patterns: [/生成.*uuid/i, /uuid.*生成/i, /给我.*uuid/i]
   },
   json_format: {
     keywords: ['json格式化', '格式化json', 'json美化', 'json整理', '美化json'],
-    patterns: [/格式化.*json/i, /美化.*json/i, /整理.*json/i]
+    patterns: [/格式化.*json/i, /美化.*json/i, /整理.*json/i],
+    dataPattern: 'json_data'  // 关联JSON数据模式
   },
   xml_format: {
     keywords: ['xml格式化', '格式化xml', 'xml美化', 'xml整理'],
-    patterns: [/格式化.*xml/i, /美化.*xml/i, /整理.*xml/i]
+    patterns: [/格式化.*xml/i, /美化.*xml/i, /整理.*xml/i],
+    dataPattern: 'xml_data'  // 关联XML数据模式
   },
   crypto: {
     keywords: ['加密', 'md5', 'sha', 'hash', '哈希', '密码', '摘要', 'sha256', 'sha1'],
@@ -29,12 +34,14 @@ export const TOOL_KEYWORDS: Record<string, {
     patterns: [/cron.*表达式/i, /定时.*表达式/i, /生成.*cron/i]
   },
   sql_in: {
-    keywords: ['sql in', 'sql转换', 'in语句', 'sql格式'],
-    patterns: [/sql\s*in/i, /转.*sql\s*in/i]
+    keywords: ['sql in', 'sql转换', 'in语句', 'sql格式', 'in拼接', '拼接sql'],
+    patterns: [/sql\s*in/i, /转.*sql\s*in/i, /拼.*sql\s*in/i, /生成.*in/i],
+    dataPattern: 'multiline_number_list'  // 关联多行数字列表模式
   },
   text_diff: {
     keywords: ['文本对比', '文本比较', 'diff', '差异对比', '文本差异'],
-    patterns: [/对比.*文本/i, /比较.*文本/i]
+    patterns: [/对比.*文本/i, /比较.*文本/i],
+    dataPattern: 'two_text_blocks'  // 关联两段文本模式
   },
   knowledge: {
     keywords: ['知识库', '查文档', '问知识库', '文档查询', '根据文档'],
@@ -47,7 +54,8 @@ export const TOOL_KEYWORDS: Record<string, {
   ticket: {
     // 只有明确要"分析工单数据"才匹配，单纯提到工单不匹配（可能是查询知识库）
     keywords: ['工单分析', '分析工单数据', 'ticket分析'],
-    patterns: [/分析.*工单数据/i, /工单数据.*分析/i]
+    patterns: [/分析.*工单数据/i, /工单数据.*分析/i],
+    dataPattern: 'table_data'  // 关联表格数据模式
   },
   todo: {
     keywords: ['待办', 'todo', '任务', '今日待办', '明日待办', '下周计划'],

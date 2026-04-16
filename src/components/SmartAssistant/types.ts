@@ -212,6 +212,7 @@ export interface IntentRouterResult {
   needConfirm?: boolean;       // 是否需要用户确认
   message?: string;            // 引导提示语（type='clarify'时有效）
   knowledgeScore?: number;     // 知识库相似度分数（type='knowledge'时有效）
+  extractedData?: string;      // 从数据模式识别中提取的数据
 }
 
 // 意图路由配置 - 开发模式可调整
