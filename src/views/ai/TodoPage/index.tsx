@@ -625,7 +625,9 @@ ${nextWeekSection}
           </span>
         </div>
         <div style={{ maxHeight: 400, overflow: 'auto' }}>
-          {Object.entries(groupedCompletedHistory).map(([date, items]) => (
+          {Object.entries(groupedCompletedHistory)
+          .sort((a, b) => b[0].localeCompare(a[0])) // 按日期倒序排序
+          .map(([date, items]) => (
             <div key={date} style={{ marginBottom: 16 }}>
               <div style={{ fontWeight: 500, color: '#16A34A', marginBottom: 8, borderBottom: '1px solid #E5E7EB', paddingBottom: 4 }}>
                 {date} ({items.length}个任务)
