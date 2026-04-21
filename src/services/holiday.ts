@@ -143,3 +143,148 @@ export const shouldGenerateWeeklyReport = (): boolean => {
 
   return false;
 };
+
+// 辅助函数：获取指定日期所在周的周一
+const getMondayOfWeek = (date: Date): Date => {
+  const d = new Date(date);
+  const dayOfWeek = d.getDay();
+  // 周日是0，周一到周六是1-6
+  // 如果是周日，需要减6天；否则减去(当前星期-1)天
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  d.setDate(d.getDate() + daysToMonday);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+// 辅助函数：获取指定日期所在周的周五
+const getFridayOfWeek = (date: Date): Date => {
+  const monday = getMondayOfWeek(date);
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  return friday;
+};
+
+// 辅助函数：格式化日期为 YYYY-MM-DD 字符串
+const formatDateStr = (date: Date): string => {
+  return date.toISOString().split('T')[0];
+};
+
+// 获取本周工作日范围 { start, end }
+// 本周开始：从周一开始找第一个工作日
+// 本周结束：从周五开始，如果不是工作日则往前找最后一个工作日
+export const getCurrentWeekWorkdays = (): { start: string; end: string } => {
+  const today = new Date();
+  const monday = getMondayOfWeek(today);
+
+  // 从周一开始找第一个工作日
+  let startDate = new Date(monday);
+  for (let i = 0; i < 7; i++) {
+    if (isWorkday(startDate)) {
+      break;
+    }
+    startDate.setDate(startDate.getDate() + 1);
+  }
+
+  // 从周五开始，如果不是工作日则往前找最后一个工作日
+  const friday = getFridayOfWeek(today);
+  let endDate = new Date(friday);
+  if (!isWorkday(endDate)) {
+    // 往前找最后一个工作日
+    for (let i = 0; i < 5; i++) {
+      endDate.setDate(endDate.getDate() - 1);
+      if (isWorkday(endDate)) {
+        break;
+      }
+    }
+  }
+
+  return {
+    start: formatDateStr(startDate),
+    end: formatDateStr(endDate)
+  };
+};
+
+// 判断日期是否在本周工作日范围内
+export const isInCurrentWeek = (date: string | Date): boolean => {
+  const { start, end } = getCurrentWeekWorkdays();
+  const dateStr = typeof date === 'string' ? date : formatDateStr(date);
+  return dateStr >= start && dateStr <= end;
+};
+
+// 获取上周工作日范围
+export const getLastWeekWorkdays = (): { start: string; end: string } => {
+  const today = new Date();
+  // 获取本周周一，然后减7天得到上周周一
+  const thisMonday = getMondayOfWeek(today);
+  const lastMonday = new Date(thisMonday);
+  lastMonday.setDate(thisMonday.getDate() - 7);
+
+  // 从上周周一开始找第一个工作日
+  let startDate = new Date(lastMonday);
+  for (let i = 0; i < 7; i++) {
+    if (isWorkday(startDate)) {
+      break;
+    }
+    startDate.setDate(startDate.getDate() + 1);
+  }
+
+  // 从上周周五开始，如果不是工作日则往前找最后一个工作日
+  const lastFriday = new Date(lastMonday);
+  lastFriday.setDate(lastMonday.getDate() + 4);
+  let endDate = new Date(lastFriday);
+  if (!isWorkday(endDate)) {
+    for (let i = 0; i < 5; i++) {
+      endDate.setDate(endDate.getDate() - 1);
+      if (isWorkday(endDate)) {
+        break;
+      }
+    }
+  }
+
+  return {
+    start: formatDateStr(startDate),
+    end: formatDateStr(endDate)
+  };
+};
+
+// 获取最近N周的工作日范围列表（从本周开始往前推N周）
+export const getRecentWeeksWorkdays = (n: number): Array<{ start: string; end: string }> => {
+  const result: Array<{ start: string; end: string }> = [];
+
+  for (let i = 0; i < n; i++) {
+    const today = new Date();
+    // 计算第i周前的周一
+    const thisMonday = getMondayOfWeek(today);
+    const targetMonday = new Date(thisMonday);
+    targetMonday.setDate(thisMonday.getDate() - 7 * i);
+
+    // 从目标周一开始找第一个工作日
+    let startDate = new Date(targetMonday);
+    for (let j = 0; j < 7; j++) {
+      if (isWorkday(startDate)) {
+        break;
+      }
+      startDate.setDate(startDate.getDate() + 1);
+    }
+
+    // 从目标周五开始，如果不是工作日则往前找最后一个工作日
+    const targetFriday = new Date(targetMonday);
+    targetFriday.setDate(targetMonday.getDate() + 4);
+    let endDate = new Date(targetFriday);
+    if (!isWorkday(endDate)) {
+      for (let j = 0; j < 5; j++) {
+        endDate.setDate(endDate.getDate() - 1);
+        if (isWorkday(endDate)) {
+          break;
+        }
+      }
+    }
+
+    result.push({
+      start: formatDateStr(startDate),
+      end: formatDateStr(endDate)
+    });
+  }
+
+  return result;
+};
