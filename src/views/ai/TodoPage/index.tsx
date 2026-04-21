@@ -656,20 +656,26 @@ ${nextWeekSection}
         onCancel={() => { setClearModalOpen(false); setClearWeekSelect(''); }}
         footer={[
           <Button key="cancel" onClick={() => { setClearModalOpen(false); setClearWeekSelect(''); }}>取消</Button>,
-          <Button key="confirm" type="primary" danger onClick={async () => {
-            let result;
-            if (clearWeekSelect === 'all') {
-              result = await clearAllCompleted();
-            } else if (clearWeekSelect === 'month') {
-              result = await clearCompletedByMonth();
-            } else if (clearWeekSelect) {
-              result = await clearCompletedByWeek(clearWeekSelect);
-            }
-            if (result?.success) {
-              message.success(`已清理${result.count}个任务`);
-              loadTodos();
-            } else if (result) {
-              message.error('清理失败');
+          <Button key="confirm" type="primary" danger disabled={!clearWeekSelect} onClick={async () => {
+            try {
+              let result;
+              if (clearWeekSelect === 'all') {
+                result = await clearAllCompleted();
+              } else if (clearWeekSelect === 'month') {
+                result = await clearCompletedByMonth();
+              } else if (clearWeekSelect) {
+                result = await clearCompletedByWeek(clearWeekSelect);
+              }
+              if (result?.success) {
+                message.success(`已清理${result.count}个任务`);
+                loadTodos();
+              } else {
+                message.error('清理失败');
+                return;
+              }
+            } catch (error) {
+              message.error('清理失败，请重试');
+              return;
             }
             setClearModalOpen(false);
             setClearWeekSelect('');
