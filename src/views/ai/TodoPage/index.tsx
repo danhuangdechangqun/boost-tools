@@ -3,7 +3,7 @@ import { Button, Input, Card, Modal, Form, message, Spin, Tag, Select } from 'an
 import { ArrowLeft, Plus, Trash2, Check, Calendar, GripVertical, RotateCcw, History, AlertCircle } from 'lucide-react';
 import dayjs from 'dayjs';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
-import { getTodos, addTodo, updateTodo, deleteTodo, callLlm, TodoItem, shouldGenerateWeeklyReport } from '@/services/api';
+import { getTodos, addTodo, updateTodo, deleteTodo, callLlm, TodoItem, shouldGenerateWeeklyReport, isInCurrentWeek } from '@/services/api';
 
 interface TodoPageProps {
   onBack: () => void;
@@ -287,7 +287,12 @@ ${nextWeekSection}
   };
 
   const getGroupTodos = (group: TodoGroup) => todos.filter(t => t.group === group && t.status === 'pending');
-  const completedTodos = todos.filter(t => t.status === 'completed');
+  // 本周已完成的任务
+  const completedTodos = todos.filter(t => {
+    if (t.status !== 'completed' || !t.completeTime) return false;
+    const completeDate = t.completeTime.split('T')[0];
+    return isInCurrentWeek(completeDate);
+  });
 
   // 按日期分组已完成任务（用于完成历史）
   const groupedCompletedHistory = completedTodos.reduce((acc, todo) => {
