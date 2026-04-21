@@ -312,4 +312,4 @@ export const testLlmConnection = llmTestConnection;
 export { getEmbedding, getSingleEmbedding, getBatchEmbeddings } from './embedding';
 
 // 节假日服务
-export { initHolidays, isHoliday, isWorkday, getNextWorkday, getFridayOrLastWorkday, shouldGenerateWeeklyReport, getRecentWeeksWorkdays, isInCurrentWeek } from './holiday';
+export { initHolidays, isHoliday, isWorkday, getNextWorkday, getFridayOrLastWorkday, shouldGenerateWeeklyReport, getRecentWeeksWorkdays, isInCurrentWeek, getCurrentWeekWorkdays, getLastWeekWorkdays } from './holiday';

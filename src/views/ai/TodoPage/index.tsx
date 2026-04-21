@@ -3,7 +3,7 @@ import { Button, Input, Card, Modal, Form, message, Spin, Tag, Select } from 'an
 import { ArrowLeft, Plus, Trash2, Check, Calendar, GripVertical, RotateCcw, History, AlertCircle } from 'lucide-react';
 import dayjs from 'dayjs';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
-import { getTodos, addTodo, updateTodo, deleteTodo, callLlm, TodoItem, shouldGenerateWeeklyReport, isInCurrentWeek } from '@/services/api';
+import { getTodos, addTodo, updateTodo, deleteTodo, callLlm, TodoItem, shouldGenerateWeeklyReport, isInCurrentWeek, getCurrentWeekWorkdays, getLastWeekWorkdays, getRecentWeeksWorkdays, clearCompletedByWeek, clearCompletedByMonth, clearAllCompleted } from '@/services/api';
 
 interface TodoPageProps {
   onBack: () => void;
@@ -26,6 +26,9 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
   const [isWeeklyReportTime, setIsWeeklyReportTime] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<'current' | 'last' | 'recent2' | 'month' | 'all'>('current');
+  const [clearModalOpen, setClearModalOpen] = useState(false);
+  const [clearWeekSelect, setClearWeekSelect] = useState<string>('');
 
   // 自动迁移：将过期的"tomorrow"任务迁移到"incomplete"
   const autoMigrateTodos = async (todoList: TodoItem[]) => {
@@ -299,8 +302,54 @@ ${nextWeekSection}
     return isInCurrentWeek(completeDate);
   });
 
+  // 按筛选条件过滤已完成任务
+  const getFilteredCompletedTodos = () => {
+    const allCompleted = todos.filter(t => t.status === 'completed');
+
+    switch (historyFilter) {
+      case 'current':
+        // 本周
+        const { start: currentStart, end: currentEnd } = getCurrentWeekWorkdays();
+        return allCompleted.filter(t => {
+          if (!t.completeTime) return false;
+          const date = t.completeTime.split('T')[0];
+          return date >= currentStart && date <= currentEnd;
+        });
+      case 'last':
+        // 上周
+        const { start: lastStart, end: lastEnd } = getLastWeekWorkdays();
+        return allCompleted.filter(t => {
+          if (!t.completeTime) return false;
+          const date = t.completeTime.split('T')[0];
+          return date >= lastStart && date <= lastEnd;
+        });
+      case 'recent2':
+        // 最近两周
+        const weeks = getRecentWeeksWorkdays(2);
+        return allCompleted.filter(t => {
+          if (!t.completeTime) return false;
+          const date = t.completeTime.split('T')[0];
+          return weeks.some(w => date >= w.start && date <= w.end);
+        });
+      case 'month':
+        // 本月
+        const today = new Date();
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const monthStartStr = monthStart.toISOString().split('T')[0];
+        return allCompleted.filter(t => {
+          if (!t.completeTime) return false;
+          const date = t.completeTime.split('T')[0];
+          return date >= monthStartStr;
+        });
+      case 'all':
+        return allCompleted;
+      default:
+        return allCompleted;
+    }
+  };
+
   // 按日期分组已完成任务（用于完成历史）
-  const groupedCompletedHistory = completedTodos.reduce((acc, todo) => {
+  const groupedCompletedHistory = getFilteredCompletedTodos().reduce((acc, todo) => {
     const date = todo.completeTime ? dayjs(todo.completeTime).format('YYYY-MM-DD') : '未知日期';
     if (!acc[date]) acc[date] = [];
     acc[date].push(todo);
@@ -552,10 +601,30 @@ ${nextWeekSection}
         title="完成历史"
         open={historyModalOpen}
         onCancel={() => setHistoryModalOpen(false)}
-        footer={<Button onClick={() => setHistoryModalOpen(false)}>关闭</Button>}
+        footer={[
+          <Button key="clear" danger onClick={() => setClearModalOpen(true)}>清理数据</Button>,
+          <Button key="close" onClick={() => setHistoryModalOpen(false)}>关闭</Button>
+        ]}
         width={600}
       >
-        <div style={{ maxHeight: 500, overflow: 'auto' }}>
+        <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+          <Select
+            value={historyFilter}
+            onChange={(value) => setHistoryFilter(value)}
+            options={[
+              { value: 'current', label: '本周' },
+              { value: 'last', label: '上周' },
+              { value: 'recent2', label: '最近两周' },
+              { value: 'month', label: '本月' },
+              { value: 'all', label: '全部' },
+            ]}
+            style={{ width: 120 }}
+          />
+          <span style={{ color: '#6B7280' }}>
+            共 {getFilteredCompletedTodos().length} 个已完成任务
+          </span>
+        </div>
+        <div style={{ maxHeight: 400, overflow: 'auto' }}>
           {Object.entries(groupedCompletedHistory).map(([date, items]) => (
             <div key={date} style={{ marginBottom: 16 }}>
               <div style={{ fontWeight: 500, color: '#16A34A', marginBottom: 8, borderBottom: '1px solid #E5E7EB', paddingBottom: 4 }}>
@@ -578,6 +647,51 @@ ${nextWeekSection}
           {Object.keys(groupedCompletedHistory).length === 0 && (
             <div style={{ textAlign: 'center', color: '#9CA3AF', padding: 40 }}>暂无完成历史记录</div>
           )}
+        </div>
+      </Modal>
+
+      <Modal
+        title="清理已完成数据"
+        open={clearModalOpen}
+        onCancel={() => { setClearModalOpen(false); setClearWeekSelect(''); }}
+        footer={[
+          <Button key="cancel" onClick={() => { setClearModalOpen(false); setClearWeekSelect(''); }}>取消</Button>,
+          <Button key="confirm" type="primary" danger onClick={async () => {
+            let result;
+            if (clearWeekSelect === 'all') {
+              result = await clearAllCompleted();
+            } else if (clearWeekSelect === 'month') {
+              result = await clearCompletedByMonth();
+            } else if (clearWeekSelect) {
+              result = await clearCompletedByWeek(clearWeekSelect);
+            }
+            if (result?.success) {
+              message.success(`已清理${result.count}个任务`);
+              loadTodos();
+            } else if (result) {
+              message.error('清理失败');
+            }
+            setClearModalOpen(false);
+            setClearWeekSelect('');
+          }}>确认清理</Button>
+        ]}
+        width={400}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Select
+            placeholder="选择要清理的数据范围"
+            value={clearWeekSelect}
+            onChange={(value) => setClearWeekSelect(value)}
+            options={[
+              ...getRecentWeeksWorkdays(8).map(w => ({ value: w.label, label: w.label })),
+              { value: 'month', label: '本月已完成' },
+              { value: 'all', label: '全部已完成' },
+            ]}
+            style={{ width: '100%' }}
+          />
+        </div>
+        <div style={{ color: '#D97706', fontSize: 12 }}>
+          注意：清理操作不可恢复，请谨慎选择
         </div>
       </Modal>
     </div>
