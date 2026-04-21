@@ -237,7 +237,12 @@ const TodoPage: React.FC<TodoPageProps> = ({ onBack }) => {
   const generateWeeklyReport = async () => {
     setReportLoading(true);
     try {
-      const completedTodos = todos.filter(t => t.status === 'completed' && t.completeTime);
+      // 只取本周完成的任务
+      const completedTodos = todos.filter(t => {
+        if (t.status !== 'completed' || !t.completeTime) return false;
+        const completeDate = t.completeTime.split('T')[0];
+        return isInCurrentWeek(completeDate);
+      });
       const nextWeekTodos = todos.filter(t => t.group === 'nextWeek' && t.status === 'pending');
 
       if (completedTodos.length === 0 && nextWeekTodos.length === 0) {
