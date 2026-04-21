@@ -83,8 +83,17 @@ export const deleteTodo = async (id: string): Promise<{ success: boolean }> => {
 export const clearCompletedByWeek = async (weekStart: string): Promise<{ success: boolean; count: number }> => {
   try {
     const weeks = getRecentWeeksWorkdays(8);
-    const week = weeks.find(w => w.start === weekStart);
+
+    // 使用 label 匹配（label 格式为 "2026-04-20 周"）
+    // 兼容两种格式：纯日期 "2026-04-20" 或带周 "2026-04-20 周"
+    const week = weeks.find(w =>
+      w.label === weekStart ||
+      w.label.startsWith(weekStart) ||
+      w.start === weekStart
+    );
+
     if (!week) {
+      console.warn('clearCompletedByWeek: week not found for', weekStart);
       return { success: false, count: 0 };
     }
 
@@ -100,7 +109,8 @@ export const clearCompletedByWeek = async (weekStart: string): Promise<{ success
     const count = originalLength - data.todos.length;
     await storageSetTodos(data);
     return { success: true, count };
-  } catch {
+  } catch (error) {
+    console.error('clearCompletedByWeek failed:', error);
     return { success: false, count: 0 };
   }
 };
