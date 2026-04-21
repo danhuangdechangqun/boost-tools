@@ -156,14 +156,6 @@ const getMondayOfWeek = (date: Date): Date => {
   return d;
 };
 
-// 辅助函数：获取指定日期所在周的周五
-const getFridayOfWeek = (date: Date): Date => {
-  const monday = getMondayOfWeek(date);
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
-  return friday;
-};
-
 // 辅助函数：格式化日期为 YYYY-MM-DD 字符串
 const formatDateStr = (date: Date): string => {
   return date.toISOString().split('T')[0];
@@ -175,33 +167,7 @@ const formatDateStr = (date: Date): string => {
 export const getCurrentWeekWorkdays = (): { start: string; end: string } => {
   const today = new Date();
   const monday = getMondayOfWeek(today);
-
-  // 从周一开始找第一个工作日
-  let startDate = new Date(monday);
-  for (let i = 0; i < 7; i++) {
-    if (isWorkday(startDate)) {
-      break;
-    }
-    startDate.setDate(startDate.getDate() + 1);
-  }
-
-  // 从周五开始，如果不是工作日则往前找最后一个工作日
-  const friday = getFridayOfWeek(today);
-  let endDate = new Date(friday);
-  if (!isWorkday(endDate)) {
-    // 往前找最后一个工作日
-    for (let i = 0; i < 5; i++) {
-      endDate.setDate(endDate.getDate() - 1);
-      if (isWorkday(endDate)) {
-        break;
-      }
-    }
-  }
-
-  return {
-    start: formatDateStr(startDate),
-    end: formatDateStr(endDate)
-  };
+  return getWeekWorkdays(formatDateStr(monday));
 };
 
 // 判断日期是否在本周工作日范围内
@@ -214,37 +180,10 @@ export const isInCurrentWeek = (date: string | Date): boolean => {
 // 获取上周工作日范围
 export const getLastWeekWorkdays = (): { start: string; end: string } => {
   const today = new Date();
-  // 获取本周周一，然后减7天得到上周周一
   const thisMonday = getMondayOfWeek(today);
   const lastMonday = new Date(thisMonday);
   lastMonday.setDate(thisMonday.getDate() - 7);
-
-  // 从上周周一开始找第一个工作日
-  let startDate = new Date(lastMonday);
-  for (let i = 0; i < 7; i++) {
-    if (isWorkday(startDate)) {
-      break;
-    }
-    startDate.setDate(startDate.getDate() + 1);
-  }
-
-  // 从上周周五开始，如果不是工作日则往前找最后一个工作日
-  const lastFriday = new Date(lastMonday);
-  lastFriday.setDate(lastMonday.getDate() + 4);
-  let endDate = new Date(lastFriday);
-  if (!isWorkday(endDate)) {
-    for (let i = 0; i < 5; i++) {
-      endDate.setDate(endDate.getDate() - 1);
-      if (isWorkday(endDate)) {
-        break;
-      }
-    }
-  }
-
-  return {
-    start: formatDateStr(startDate),
-    end: formatDateStr(endDate)
-  };
+  return getWeekWorkdays(formatDateStr(lastMonday));
 };
 
 // 获取指定周的工作日范围（参数：周的起始周一日期）
@@ -273,10 +212,14 @@ export const getWeekWorkdays = (weekStartMonday: string): { start: string; end: 
     }
   }
 
-  return {
-    start: formatDateStr(startDate),
-    end: formatDateStr(endDate)
-  };
+  // 边界情况：如果一周全是节假日（start > end），返回周一
+  const startStr = formatDateStr(startDate);
+  const endStr = formatDateStr(endDate);
+  if (startStr > endStr) {
+    return { start: formatDateStr(monday), end: formatDateStr(monday) };
+  }
+
+  return { start: startStr, end: endStr };
 };
 
 // 获取最近N周的工作日范围列表（从本周开始往前推N周）
