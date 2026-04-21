@@ -6,6 +6,7 @@ import { TodoItem, NoteItem, PasswordItem, PromptItem, AppConfig, LLMResponse } 
 import { initStorage as initStorageService, getConfig as storageGetConfig, setConfig as storageSetConfig, getTodos as storageGetTodos, setTodos as storageSetTodos, getNotes as storageGetNotes, setNotes as storageSetNotes, getPasswords as storageGetPasswords, setPasswords as storageSetPasswords, getPrompts as storageGetPrompts, setPrompts as storageSetPrompts } from './storage';
 import { callLlm as llmCall, testLlmConnection as llmTestConnection, initLLM as llmInit, updateLLMConfig } from './llm';
 import { clearEmbeddingConfigCache } from './embedding';
+import { getRecentWeeksWorkdays } from './holiday';
 
 // 类型导出
 export type { AppConfig, TodoItem, NoteItem, PasswordItem, PromptItem, LLMResponse } from '@/types';
@@ -75,6 +76,72 @@ export const deleteTodo = async (id: string): Promise<{ success: boolean }> => {
     return { success: true };
   } catch {
     return { success: false };
+  }
+};
+
+// 清理指定周的已完成任务
+export const clearCompletedByWeek = async (weekStart: string): Promise<{ success: boolean; count: number }> => {
+  try {
+    const weeks = getRecentWeeksWorkdays(8);
+    const week = weeks.find(w => w.start === weekStart);
+    if (!week) {
+      return { success: false, count: 0 };
+    }
+
+    const data = await storageGetTodos();
+    const originalLength = (data.todos || []).length;
+
+    data.todos = (data.todos || []).filter(t => {
+      if (t.status !== 'completed' || !t.completeTime) return true;
+      const completeDate = t.completeTime.split('T')[0];
+      return completeDate < week.start || completeDate > week.end;
+    });
+
+    const count = originalLength - data.todos.length;
+    await storageSetTodos(data);
+    return { success: true, count };
+  } catch {
+    return { success: false, count: 0 };
+  }
+};
+
+// 清理本月的已完成任务
+export const clearCompletedByMonth = async (): Promise<{ success: boolean; count: number }> => {
+  try {
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+
+    const data = await storageGetTodos();
+    const originalLength = (data.todos || []).length;
+
+    data.todos = (data.todos || []).filter(t => {
+      if (t.status !== 'completed' || !t.completeTime) return true;
+      const completeDate = t.completeTime.split('T')[0];
+      return completeDate < monthStart || completeDate > monthEnd;
+    });
+
+    const count = originalLength - data.todos.length;
+    await storageSetTodos(data);
+    return { success: true, count };
+  } catch {
+    return { success: false, count: 0 };
+  }
+};
+
+// 清理全部已完成任务
+export const clearAllCompleted = async (): Promise<{ success: boolean; count: number }> => {
+  try {
+    const data = await storageGetTodos();
+    const originalLength = (data.todos || []).length;
+
+    data.todos = (data.todos || []).filter(t => t.status !== 'completed');
+
+    const count = originalLength - data.todos.length;
+    await storageSetTodos(data);
+    return { success: true, count };
+  } catch {
+    return { success: false, count: 0 };
   }
 };
 
@@ -235,4 +302,4 @@ export const testLlmConnection = llmTestConnection;
 export { getEmbedding, getSingleEmbedding, getBatchEmbeddings } from './embedding';
 
 // 节假日服务
-export { initHolidays, isHoliday, isWorkday, getNextWorkday, getFridayOrLastWorkday, shouldGenerateWeeklyReport } from './holiday';
+export { initHolidays, isHoliday, isWorkday, getNextWorkday, getFridayOrLastWorkday, shouldGenerateWeeklyReport, getRecentWeeksWorkdays } from './holiday';
