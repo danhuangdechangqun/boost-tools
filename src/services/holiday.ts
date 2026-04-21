@@ -247,9 +247,41 @@ export const getLastWeekWorkdays = (): { start: string; end: string } => {
   };
 };
 
+// 获取指定周的工作日范围（参数：周的起始周一日期）
+export const getWeekWorkdays = (weekStartMonday: string): { start: string; end: string } => {
+  const monday = new Date(weekStartMonday);
+
+  // 从周一开始找第一个工作日
+  let startDate = new Date(monday);
+  for (let i = 0; i < 7; i++) {
+    if (isWorkday(startDate)) {
+      break;
+    }
+    startDate.setDate(startDate.getDate() + 1);
+  }
+
+  // 从周五开始，如果不是工作日则往前找最后一个工作日
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  let endDate = new Date(friday);
+  if (!isWorkday(endDate)) {
+    for (let i = 0; i < 5; i++) {
+      endDate.setDate(endDate.getDate() - 1);
+      if (isWorkday(endDate)) {
+        break;
+      }
+    }
+  }
+
+  return {
+    start: formatDateStr(startDate),
+    end: formatDateStr(endDate)
+  };
+};
+
 // 获取最近N周的工作日范围列表（从本周开始往前推N周）
-export const getRecentWeeksWorkdays = (n: number): Array<{ start: string; end: string }> => {
-  const result: Array<{ start: string; end: string }> = [];
+export const getRecentWeeksWorkdays = (n: number): Array<{ start: string; end: string; label: string }> => {
+  const result: Array<{ start: string; end: string; label: string }> = [];
 
   for (let i = 0; i < n; i++) {
     const today = new Date();
@@ -258,31 +290,13 @@ export const getRecentWeeksWorkdays = (n: number): Array<{ start: string; end: s
     const targetMonday = new Date(thisMonday);
     targetMonday.setDate(thisMonday.getDate() - 7 * i);
 
-    // 从目标周一开始找第一个工作日
-    let startDate = new Date(targetMonday);
-    for (let j = 0; j < 7; j++) {
-      if (isWorkday(startDate)) {
-        break;
-      }
-      startDate.setDate(startDate.getDate() + 1);
-    }
-
-    // 从目标周五开始，如果不是工作日则往前找最后一个工作日
-    const targetFriday = new Date(targetMonday);
-    targetFriday.setDate(targetMonday.getDate() + 4);
-    let endDate = new Date(targetFriday);
-    if (!isWorkday(endDate)) {
-      for (let j = 0; j < 5; j++) {
-        endDate.setDate(endDate.getDate() - 1);
-        if (isWorkday(endDate)) {
-          break;
-        }
-      }
-    }
+    const mondayStr = formatDateStr(targetMonday);
+    const { start, end } = getWeekWorkdays(mondayStr);
 
     result.push({
-      start: formatDateStr(startDate),
-      end: formatDateStr(endDate)
+      start,
+      end,
+      label: `${mondayStr} 周`
     });
   }
 
