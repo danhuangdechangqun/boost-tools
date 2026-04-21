@@ -67,7 +67,12 @@
       "Bash(npx vitest:*)",
       "WebSearch",
       "Bash(npm uninstall:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+	  "Bash(cd * && git status)",
+      "Bash(cd * && git log *)",
+      "Bash(cd * && git diff)",
+      "Bash(cd * && git add *)",
+      "Bash(cd * && git commit *)"
     ]
   }
 }
